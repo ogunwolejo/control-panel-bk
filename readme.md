@@ -95,3 +95,12 @@ $ mau deploy
     docker-compose down <service-name> || docker-compose stop <service-name>
 ```
 
+### REBUILD A CONTAINER
+```bash
+    docker-compose up --build 
+```
+
+### Shows logs in real time
+```bash
+    docker-compose logs -f
+```

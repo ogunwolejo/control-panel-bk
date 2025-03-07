@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -36,5 +37,6 @@ func DefaultPayStackConfiguration() *PayStack {
 		},
 	}
 
+	log.Println("Result Pay stack config ", PayStackConfig)
 	return &PayStackConfig
 }

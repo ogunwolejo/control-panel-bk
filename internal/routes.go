@@ -11,16 +11,24 @@ func routes() http.Handler {
 	appMiddleware(mux)
 
 	// Routes
-	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
-	})
+	mux.Route("/api", func(r chi.Router) {
+		r.Route("/v1", func(r chi.Router) {
 
-	mux.Route("/api/v1", func(r chi.Router) {
+			r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("Hello, World!"))
+			})
 
-		r.Route("/tier", func(rtr chi.Router) {
-			rtr.Post("/", tiers.HandleTierCreation)
+			// The Tier Sub Routes
+			r.Route("/tier", func(tierRouter chi.Router) {
+				tierRouter.Get("/all", tiers.HandleFetchTiers)
+				tierRouter.Get("/:id", tiers.HandleFetchTier)
+
+				tierRouter.Group(func(tierRouterGroup chi.Router) {
+					tierRouterGroup.Post("/", tiers.HandleTierCreation)
+				})
+			})
+
 		})
-
 	})
 
 	return mux

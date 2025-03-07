@@ -5,11 +5,14 @@ import (
 	"context"
 	cfg "control-panel-bk/config"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/google/go-querystring/query"
+	"io"
 	"log"
 	"net/http"
 	burl "net/url"
+	"time"
 )
 
 type Interval string
@@ -31,28 +34,24 @@ const (
 	CurrencyZAR Currency = "ZAR"
 )
 
-var psConfig cfg.PayStack = cfg.PayStackConfig
-
-type TierData struct {
-	Name         string   `json:"name"`
-	Amount       int      `json:"amount"`
-	Interval     Interval `json:"interval"`
-	Integration  int      `json:"integration"`
-	Domain       string   `json:"domain"`
-	PlanCode     string   `json:"plan_code"`
-	SendInvoices bool     `json:"send_invoices"`
-	SendSMS      bool     `json:"send_sms"`
-	HostedPage   bool     `json:"hosted_page"`
-	Currency     Currency `json:"currency"`
-	ID           int      `json:"id"`
-	CreatedAt    string   `json:"createdAt"`
-	UpdatedAt    string   `json:"updatedAt"`
-}
-
 type TierResponse struct {
-	Status  bool     `json:"status"`
-	message string   `json:"message"`
-	data    TierData `json:"data"`
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+	Data    struct {
+		Name         string    `json:"name"`
+		Amount       int       `json:"amount"`
+		Interval     string    `json:"interval"`
+		Integration  int       `json:"integration"`
+		Domain       string    `json:"domain"`
+		PlanCode     string    `json:"plan_code"`
+		SendInvoices bool      `json:"send_invoices"`
+		SendSms      bool      `json:"send_sms"`
+		HostedPage   bool      `json:"hosted_page"`
+		Currency     string    `json:"currency"`
+		Id           int       `json:"id"`
+		CreatedAt    time.Time `json:"createdAt"`
+		UpdatedAt    time.Time `json:"updatedAt"`
+	} `json:"data"`
 }
 
 type CreateTierRequest struct {
@@ -62,14 +61,14 @@ type CreateTierRequest struct {
 	Description  string   `json:"description,omitempty"`
 	SendInvoices bool     `json:"send_invoices,omitempty"`
 	SendSMS      bool     `json:"send_sms,omitempty"`
-	Currency     Currency `json:"currency, omitempty"`
+	Currency     Currency `json:"currency,omitempty"`
 	InvoiceLimit int      `json:"invoice_limit,omitempty"`
 }
 
 type FetchTiersRequest struct {
 	PerPage  int      `json:"perPage"`
 	Page     int      `json:"page"`
-	Status   int      `json:"status,omitempty"`
+	Status   string   `json:"status,omitempty"`
 	Interval Interval `json:"interval,omitempty"`
 	Amount   int64    `json:"amount,omitempty"`
 }
@@ -79,89 +78,114 @@ type UpdateTierRequest struct {
 	UpdateExistingSubscriptions bool `json:"update_existing_subscriptions,omitempty"`
 }
 
-var client = &http.Client{}
-var url = fmt.Sprintf("%s:%d/plan", psConfig.Host, psConfig.Port)
+type APIError struct {
+	Code    string                 `json:"code"`
+	Message string                 `json:"message"`
+	Meta    map[string]interface{} `json:"meta"`
+	Status  bool                   `json:"status"`
+	Type    string                 `json:"type"`
+}
+
+var client = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
+var url = "https://api.paystack.co:443/plan"
 
 // CreateTier creates a new tier on the PayStack API
-func CreateTier(tier CreateTierRequest) (*TierResponse, error) {
-	ctx := context.Background()
+func CreateTier(tier CreateTierRequest, ctx context.Context) (*TierResponse, error, int) {
 	body, err := json.Marshal(tier)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
-	req.Header.Set("Authorization", psConfig.Headers.Authorization)
-	req.Header.Set("Content-Type", psConfig.Headers.ContentType)
-	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Authorization", cfg.PayStackConfig.Headers.Authorization)
+	req.Header.Set("Content-Type", cfg.PayStackConfig.Headers.ContentType)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to create tier: %d", resp.StatusCode)
+	responseBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err, http.StatusInternalServerError
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		var errResponse APIError
+		if err := json.Unmarshal(responseBytes, &errResponse); err != nil {
+			return nil, err, http.StatusInternalServerError
+		}
+
+		return nil, errors.New(errResponse.Message), resp.StatusCode
 	}
 
 	var createdTier TierResponse
-	if err := json.NewDecoder(resp.Body).Decode(&createdTier); err != nil {
-		return nil, err
+	if err := json.Unmarshal(responseBytes, &createdTier); err != nil {
+		return nil, err, http.StatusInternalServerError
 	}
 
-	return &createdTier, nil
+	return &createdTier, nil, http.StatusCreated
 }
 
 // GetTier retrieves a tier from the PayStack API by the plan code
-func GetTier(planCode string) (*TierResponse, error) {
+func GetTier(planCode string) (*TierResponse, error, int) {
 	ctx := context.Background()
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/%s", url, planCode), nil)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
-	req.Header.Set("Authorization", psConfig.Headers.Authorization)
-	req.Header.Set("Content-Type", psConfig.Headers.ContentType)
+	req.Header.Set("Authorization", cfg.PayStackConfig.Headers.Authorization)
+	req.Header.Set("Content-Type", cfg.PayStackConfig.Headers.ContentType)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get tier: %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to get tier: %d", resp.StatusCode), resp.StatusCode
 	}
 
 	var tier TierResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tier); err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
-	return &tier, nil
+	return &tier, nil, http.StatusOK
 }
 
 // FetchTiers retrieves all tiers from the PayStack API
-func FetchTiers(arg FetchTiersRequest) (*TierResponse, error) {
+func FetchTiers(arg FetchTiersRequest) (*TierResponse, error, int) {
 	ctx := context.Background()
 	body, err := json.Marshal(arg)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
+	log.Println("BODY: ", body)
 
 	v, err := query.Values(body)
 	if err != nil {
 		log.Fatal("Query values error: ", err)
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
 	baseUrl, err := burl.Parse(url)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
 	baseUrl.RawQuery = v.Encode()
@@ -169,31 +193,30 @@ func FetchTiers(arg FetchTiersRequest) (*TierResponse, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", baseUrlStr, nil)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
-	req.Header.Set("Authorization", psConfig.Headers.Authorization)
-	req.Header.Set("Content-Type", psConfig.Headers.ContentType)
-	req.Header.Set("Cache-Control", "cache")
+	req.Header.Set("Authorization", cfg.PayStackConfig.Headers.Authorization)
+	req.Header.Set("Content-Type", cfg.PayStackConfig.Headers.ContentType)
 
 	resp, err := client.Do(req)
+	log.Println("Do: ", resp)
+	log.Println("Req: ", req)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get tiers: %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to get tiers: %d", resp.StatusCode), resp.StatusCode
 	}
 
 	var fetchTiers TierResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fetchTiers); err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
-	return &fetchTiers, nil
+	return &fetchTiers, nil, http.StatusOK
 }
-
-
 
 // UpdateTier updates a tier via the PayStack API
 func UpdateTier(planCode string, updateOption UpdateTierRequest) (*TierResponse, error) {
@@ -207,8 +230,8 @@ func UpdateTier(planCode string, updateOption UpdateTierRequest) (*TierResponse,
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", psConfig.Headers.Authorization)
-	req.Header.Set("Content-Type", psConfig.Headers.ContentType)
+	req.Header.Set("Authorization", cfg.PayStackConfig.Headers.Authorization)
+	req.Header.Set("Content-Type", cfg.PayStackConfig.Headers.ContentType)
 
 	resp, err := client.Do(req)
 	if err != nil {
