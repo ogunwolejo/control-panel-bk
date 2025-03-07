@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/google/go-querystring/query"
 	"io"
-	"log"
 	"net/http"
 	burl "net/url"
 	"time"
@@ -34,6 +33,7 @@ const (
 	CurrencyZAR Currency = "ZAR"
 )
 
+// TierResponse Create Tier Response
 type TierResponse struct {
 	Status  bool   `json:"status"`
 	Message string `json:"message"`
@@ -73,6 +73,71 @@ type FetchTiersRequest struct {
 	Amount   int64    `json:"amount,omitempty"`
 }
 
+// FetchAllTiersResponse The response sent when we fetch the list of all tiers
+type FetchAllTiersResponse struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+	Data    []struct {
+		Subscriptions []struct {
+			Customer         int    `json:"customer"`
+			Plan             int    `json:"plan"`
+			Integration      int    `json:"integration"`
+			Domain           string `json:"domain"`
+			Start            int    `json:"start"`
+			Status           string `json:"status"`
+			Quantity         int    `json:"quantity"`
+			Amount           int    `json:"amount"`
+			SubscriptionCode string `json:"subscription_code"`
+			EmailToken       string `json:"email_token"`
+			Authorization    struct {
+				AuthorizationCode string `json:"authorization_code"`
+				Bin               string `json:"bin"`
+				Last4             string `json:"last4"`
+				ExpMonth          string `json:"exp_month"`
+				ExpYear           string `json:"exp_year"`
+				Channel           string `json:"channel"`
+				CardType          string `json:"card_type"`
+				Bank              string `json:"bank"`
+				CountryCode       string `json:"country_code"`
+				Brand             string `json:"brand"`
+				Reusable          bool   `json:"reusable"`
+				Signature         string `json:"signature"`
+				AccountName       string `json:"account_name"`
+			} `json:"authorization"`
+			EasyCronId      interface{} `json:"easy_cron_id"`
+			CronExpression  string      `json:"cron_expression"`
+			NextPaymentDate time.Time   `json:"next_payment_date"`
+			OpenInvoice     interface{} `json:"open_invoice"`
+			Id              int         `json:"id"`
+			CreatedAt       time.Time   `json:"createdAt"`
+			UpdatedAt       time.Time   `json:"updatedAt"`
+		} `json:"subscriptions"`
+		Integration       int         `json:"integration"`
+		Domain            string      `json:"domain"`
+		Name              string      `json:"name"`
+		PlanCode          string      `json:"plan_code"`
+		Description       interface{} `json:"description"`
+		Amount            int         `json:"amount"`
+		Interval          string      `json:"interval"`
+		SendInvoices      bool        `json:"send_invoices"`
+		SendSms           bool        `json:"send_sms"`
+		HostedPage        bool        `json:"hosted_page"`
+		HostedPageUrl     interface{} `json:"hosted_page_url"`
+		HostedPageSummary interface{} `json:"hosted_page_summary"`
+		Currency          string      `json:"currency"`
+		Id                int         `json:"id"`
+		CreatedAt         time.Time   `json:"createdAt"`
+		UpdatedAt         time.Time   `json:"updatedAt"`
+	} `json:"data"`
+	Meta struct {
+		Total     int `json:"total"`
+		Skipped   int `json:"skipped"`
+		PerPage   int `json:"perPage"`
+		Page      int `json:"page"`
+		PageCount int `json:"pageCount"`
+	} `json:"meta"`
+}
+
 type UpdateTierRequest struct {
 	CreateTierRequest,
 	UpdateExistingSubscriptions bool `json:"update_existing_subscriptions,omitempty"`
@@ -102,6 +167,41 @@ func CreateTier(tier CreateTierRequest, ctx context.Context) (*TierResponse, err
 	body, err := json.Marshal(tier)
 	if err != nil {
 		return nil, err, http.StatusInternalServerError
+	}
+
+	// We need to check if the Tiers exist already
+	fetchTiers := make(chan *FetchAllTiersResponse)
+	fetchErr := make(chan error)
+	fetchErrCode := make(chan int)
+	go func() {
+		par := FetchTiersRequest{
+			PerPage:  0,
+			Amount:   tier.Amount,
+			Interval: tier.Interval,
+			Page:     1,
+			Status:   "active",
+		}
+
+		t, e, scd := FetchTiers(par)
+		fetchTiers <- t
+		fetchErr <- e
+		fetchErrCode <- scd
+
+		close(fetchTiers)
+		close(fetchErr)
+		close(fetchErrCode)
+	}()
+
+	select {
+	case er := <-fetchErr:
+		if er != nil {
+			return nil, er, <-fetchErrCode
+		}
+
+	case list := <-fetchTiers:
+		if len(list.Data) > 0 {
+			return nil, errors.New("an active tier with the same data already exists"), http.StatusOK
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
@@ -169,52 +269,54 @@ func GetTier(planCode string) (*TierResponse, error, int) {
 }
 
 // FetchTiers retrieves all tiers from the PayStack API
-func FetchTiers(arg FetchTiersRequest) (*TierResponse, error, int) {
+func FetchTiers(arg FetchTiersRequest) (*FetchAllTiersResponse, error, int) {
 	ctx := context.Background()
-	body, err := json.Marshal(arg)
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-	log.Println("BODY: ", body)
 
-	v, err := query.Values(body)
-	if err != nil {
-		log.Fatal("Query values error: ", err)
-		return nil, err, http.StatusInternalServerError
+	v, queryErr := query.Values(arg)
+	if queryErr != nil {
+		return nil, queryErr, http.StatusInternalServerError
 	}
 
-	baseUrl, err := burl.Parse(url)
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
+	baseUrl, urlErr := burl.Parse(url)
+	if urlErr != nil {
+		return nil, urlErr, http.StatusInternalServerError
 	}
 
 	baseUrl.RawQuery = v.Encode()
 	baseUrlStr := baseUrl.String()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", baseUrlStr, nil)
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
+	req, e := http.NewRequestWithContext(ctx, "GET", baseUrlStr, nil)
+	if e != nil {
+		return nil, e, http.StatusInternalServerError
 	}
+
 	req.Header.Set("Authorization", cfg.PayStackConfig.Headers.Authorization)
 	req.Header.Set("Content-Type", cfg.PayStackConfig.Headers.ContentType)
 
 	resp, err := client.Do(req)
-	log.Println("Do: ", resp)
-	log.Println("Req: ", req)
 	if err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
 
 	defer resp.Body.Close()
+
+	respBody, respBodyErr := io.ReadAll(resp.Body)
+	if respBodyErr != nil {
+		return nil, respBodyErr, http.StatusInternalServerError
+	}
+
 	if resp.StatusCode != http.StatusOK {
+		var errorResponse APIError
+		if e := json.Unmarshal(respBody, &errorResponse); e != nil {
+			return nil, errors.New(errorResponse.Message), http.StatusInternalServerError
+		}
 		return nil, fmt.Errorf("failed to get tiers: %d", resp.StatusCode), resp.StatusCode
 	}
 
-	var fetchTiers TierResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fetchTiers); err != nil {
+	var fetchTiers FetchAllTiersResponse
+	if err := json.Unmarshal(respBody, &fetchTiers); err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
-
 	return &fetchTiers, nil, http.StatusOK
 }
 

@@ -56,17 +56,21 @@ func HandleFetchTiers(w http.ResponseWriter, r *http.Request) {
 	tiers, err, statusCode := FetchTiers(ftr)
 	if err != nil {
 		utils.ErrorException(w, err, statusCode)
+		return
+	}
+
+	reads, e := json.Marshal(tiers)
+	if e != nil {
+		utils.ErrorException(w, err, statusCode)
+		return
 	}
 
 	w.Header().Set("Content-Encoding", "application/json")
 	w.WriteHeader(statusCode)
-	e := json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": true,
-		"data":   *tiers,
-	})
-
-	if e != nil {
-		utils.ErrorException(w, err, http.StatusInternalServerError)
+	_, writeErr := w.Write(reads)
+	if writeErr != nil {
+		utils.ErrorException(w, writeErr, http.StatusInternalServerError)
+		return
 	}
 }
 
