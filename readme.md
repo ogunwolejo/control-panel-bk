@@ -115,3 +115,13 @@ $ mau deploy
     cd module
     go test 
 ```
+
+### Test Coverage Percentage
+```bash
+    go test -cover -coverprofile=coverage.out
+```
+
+### Test coverage in a specific package
+```bash
+    go test -cover 
+```
