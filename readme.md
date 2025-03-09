@@ -104,3 +104,14 @@ $ mau deploy
 ```bash
     docker-compose logs -f
 ```
+
+### Test ALl File
+```bash
+    go test ./...
+```
+
+### Test Files in a module
+```bash
+    cd module
+    go test 
+```

@@ -10,8 +10,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	cfg "control-panel-bk/config"
 )
 
 func ControlPanelServer() {
@@ -22,15 +20,6 @@ func ControlPanelServer() {
 		Handler: routes(),
 		Addr:    fmt.Sprintf(":%s", os.Getenv("PORT")),
 	}
-
-	// Start the PayStack configuration and any other major config in a goroutine
-	go func() {
-		defer func() {
-			recover()
-		}()
-
-		cfg.DefaultPayStackConfiguration()
-	}()
 
 	go func() {
 		log.Printf("Server started on port %s\n", os.Getenv("PORT"))

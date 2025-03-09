@@ -54,27 +54,7 @@ type TierResponse struct {
 	} `json:"data"`
 }
 
-type CreateTierRequest struct {
-	Name         string   `json:"name"`
-	Amount       int64    `json:"amount"`
-	Interval     Interval `json:"interval"`
-	Description  string   `json:"description,omitempty"`
-	SendInvoices bool     `json:"send_invoices,omitempty"`
-	SendSMS      bool     `json:"send_sms,omitempty"`
-	Currency     Currency `json:"currency,omitempty"`
-	InvoiceLimit int      `json:"invoice_limit,omitempty"`
-}
-
-type FetchTiersRequest struct {
-	PerPage  int      `json:"perPage"`
-	Page     int      `json:"page"`
-	Status   string   `json:"status,omitempty"`
-	Interval Interval `json:"interval,omitempty"`
-	Amount   int64    `json:"amount,omitempty"`
-}
-
-// FetchAllTiersResponse The response sent when we fetch the list of all tiers
-type FetchAllTiersResponse struct {
+type FetchTiersResponse struct {
 	Status  bool   `json:"status"`
 	Message string `json:"message"`
 	Data    []struct {
@@ -138,6 +118,94 @@ type FetchAllTiersResponse struct {
 	} `json:"meta"`
 }
 
+type FetchTierResponse struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+	Data    struct {
+		Subscriptions []struct {
+			Customer         int    `json:"customer"`
+			Plan             int    `json:"plan"`
+			Integration      int    `json:"integration"`
+			Domain           string `json:"domain"`
+			Start            int    `json:"start"`
+			Status           string `json:"status"`
+			Quantity         int    `json:"quantity"`
+			Amount           int    `json:"amount"`
+			SubscriptionCode string `json:"subscription_code"`
+			EmailToken       string `json:"email_token"`
+			Authorization    struct {
+				AuthorizationCode string `json:"authorization_code"`
+				Bin               string `json:"bin"`
+				Last4             string `json:"last4"`
+				ExpMonth          string `json:"exp_month"`
+				ExpYear           string `json:"exp_year"`
+				Channel           string `json:"channel"`
+				CardType          string `json:"card_type"`
+				Bank              string `json:"bank"`
+				CountryCode       string `json:"country_code"`
+				Brand             string `json:"brand"`
+				Reusable          bool   `json:"reusable"`
+				Signature         string `json:"signature"`
+				AccountName       string `json:"account_name"`
+			} `json:"authorization"`
+			EasyCronId      interface{} `json:"easy_cron_id"`
+			CronExpression  string      `json:"cron_expression"`
+			NextPaymentDate time.Time   `json:"next_payment_date"`
+			OpenInvoice     interface{} `json:"open_invoice"`
+			Id              int         `json:"id"`
+			CreatedAt       time.Time   `json:"createdAt"`
+			UpdatedAt       time.Time   `json:"updatedAt"`
+		} `json:"subscriptions"`
+		Integration       int         `json:"integration"`
+		Domain            string      `json:"domain"`
+		Name              string      `json:"name"`
+		PlanCode          string      `json:"plan_code"`
+		Description       interface{} `json:"description"`
+		Amount            int         `json:"amount"`
+		Interval          string      `json:"interval"`
+		SendInvoices      bool        `json:"send_invoices"`
+		SendSms           bool        `json:"send_sms"`
+		HostedPage        bool        `json:"hosted_page"`
+		HostedPageUrl     interface{} `json:"hosted_page_url"`
+		HostedPageSummary interface{} `json:"hosted_page_summary"`
+		Currency          string      `json:"currency"`
+		Id                int         `json:"id"`
+		CreatedAt         time.Time   `json:"createdAt"`
+		UpdatedAt         time.Time   `json:"updatedAt"`
+	} `json:"data"`
+	Meta struct {
+		Total     int `json:"total"`
+		Skipped   int `json:"skipped"`
+		PerPage   int `json:"perPage"`
+		Page      int `json:"page"`
+		PageCount int `json:"pageCount"`
+	} `json:"meta"`
+}
+
+type UpdateTierResponse struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+}
+
+type CreateTierRequest struct {
+	Name         string   `json:"name"`
+	Amount       int64    `json:"amount"`
+	Interval     Interval `json:"interval"`
+	Description  string   `json:"description,omitempty"`
+	SendInvoices bool     `json:"send_invoices,omitempty"`
+	SendSMS      bool     `json:"send_sms,omitempty"`
+	Currency     Currency `json:"currency,omitempty"`
+	InvoiceLimit int      `json:"invoice_limit,omitempty"`
+}
+
+type FetchTiersRequest struct {
+	PerPage  int      `json:"perPage"`
+	Page     int      `json:"page"`
+	Status   string   `json:"status,omitempty"`
+	Interval Interval `json:"interval,omitempty"`
+	Amount   int64    `json:"amount,omitempty"`
+}
+
 type UpdateTierRequest struct {
 	CreateTierRequest,
 	UpdateExistingSubscriptions bool `json:"update_existing_subscriptions,omitempty"`
@@ -160,7 +228,8 @@ var client = &http.Client{
 	},
 }
 
-var url = "https://api.paystack.co:443/plan"
+var payStackConfig = cfg.DefaultPayStackConfiguration()
+var url = payStackConfig.PlanUrl()
 
 // CreateTier creates a new tier on the PayStack API
 func CreateTier(tier CreateTierRequest, ctx context.Context) (*TierResponse, error, int) {
@@ -170,7 +239,7 @@ func CreateTier(tier CreateTierRequest, ctx context.Context) (*TierResponse, err
 	}
 
 	// We need to check if the Tiers exist already
-	fetchTiers := make(chan *FetchAllTiersResponse)
+	fetchTiers := make(chan *FetchTiersResponse)
 	fetchErr := make(chan error)
 	fetchErrCode := make(chan int)
 	go func() {
@@ -182,7 +251,7 @@ func CreateTier(tier CreateTierRequest, ctx context.Context) (*TierResponse, err
 			Status:   "active",
 		}
 
-		t, e, scd := FetchTiers(par)
+		t, e, scd := FetchTiers(par, ctx)
 		fetchTiers <- t
 		fetchErr <- e
 		fetchErrCode <- scd
@@ -241,8 +310,7 @@ func CreateTier(tier CreateTierRequest, ctx context.Context) (*TierResponse, err
 }
 
 // GetTier retrieves a tier from the PayStack API by the plan code
-func GetTier(planCode string) (*TierResponse, error, int) {
-	ctx := context.Background()
+func GetTier(planCode string, ctx context.Context) (*FetchTierResponse, error, int) {
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/%s", url, planCode), nil)
 	if err != nil {
 		return nil, err, http.StatusInternalServerError
@@ -250,18 +318,28 @@ func GetTier(planCode string) (*TierResponse, error, int) {
 	req.Header.Set("Authorization", cfg.PayStackConfig.Headers.Authorization)
 	req.Header.Set("Content-Type", cfg.PayStackConfig.Headers.ContentType)
 
-	resp, err := client.Do(req)
+	resp, respErr := client.Do(req)
+	defer resp.Body.Close()
+
+	if respErr != nil {
+		return nil, err, http.StatusInternalServerError
+	}
+
+	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
 
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		var apiErr APIError
+		if err := json.Unmarshal(respBytes, &apiErr); err != nil {
+			return nil, errors.New(apiErr.Message), resp.StatusCode
+		}
 		return nil, fmt.Errorf("failed to get tier: %d", resp.StatusCode), resp.StatusCode
 	}
 
-	var tier TierResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tier); err != nil {
+	var tier FetchTierResponse
+	if err := json.Unmarshal(respBytes, &tier); err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
 
@@ -269,9 +347,7 @@ func GetTier(planCode string) (*TierResponse, error, int) {
 }
 
 // FetchTiers retrieves all tiers from the PayStack API
-func FetchTiers(arg FetchTiersRequest) (*FetchAllTiersResponse, error, int) {
-	ctx := context.Background()
-
+func FetchTiers(arg FetchTiersRequest, ctx context.Context) (*FetchTiersResponse, error, int) {
 	v, queryErr := query.Values(arg)
 	if queryErr != nil {
 		return nil, queryErr, http.StatusInternalServerError
@@ -313,7 +389,7 @@ func FetchTiers(arg FetchTiersRequest) (*FetchAllTiersResponse, error, int) {
 		return nil, fmt.Errorf("failed to get tiers: %d", resp.StatusCode), resp.StatusCode
 	}
 
-	var fetchTiers FetchAllTiersResponse
+	var fetchTiers FetchTiersResponse
 	if err := json.Unmarshal(respBody, &fetchTiers); err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
@@ -321,33 +397,44 @@ func FetchTiers(arg FetchTiersRequest) (*FetchAllTiersResponse, error, int) {
 }
 
 // UpdateTier updates a tier via the PayStack API
-func UpdateTier(planCode string, updateOption UpdateTierRequest) (*TierResponse, error) {
-	ctx := context.Background()
+func UpdateTier(planCode string, updateOption UpdateTierRequest, ctx context.Context) (*UpdateTierResponse, error, int) {
 	body, err := json.Marshal(updateOption)
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/%s", url, planCode), bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 	req.Header.Set("Authorization", cfg.PayStackConfig.Headers.Authorization)
 	req.Header.Set("Content-Type", cfg.PayStackConfig.Headers.ContentType)
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	resp, respErr := client.Do(req)
+	if respErr != nil {
+		return nil, respErr, resp.StatusCode
+	}
+
+	defer resp.Body.Close()
+
+	respBytes, e := io.ReadAll(resp.Body)
+	if e != nil {
+		return nil, e, http.StatusInternalServerError
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to update tier: %d", resp.StatusCode)
+		var apiErr APIError
+		if err := json.Unmarshal(respBytes, &apiErr); err != nil {
+			return nil, errors.New(apiErr.Message), resp.StatusCode
+		}
+
+		return nil, fmt.Errorf("failed to update tier"), resp.StatusCode
 	}
 
-	var updatedTier TierResponse
-	if err := json.NewDecoder(resp.Body).Decode(&updatedTier); err != nil {
-		return nil, err
+	var updatedTier UpdateTierResponse
+	if err := json.Unmarshal(respBytes, &updatedTier); err != nil {
+		return nil, err, http.StatusInternalServerError
 	}
 
-	return &updatedTier, nil
+	return &updatedTier, nil, http.StatusOK
 }

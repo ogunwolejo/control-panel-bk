@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -37,6 +36,14 @@ func DefaultPayStackConfiguration() *PayStack {
 		},
 	}
 
-	log.Println("Result Pay stack config ", PayStackConfig)
 	return &PayStackConfig
+}
+
+func (p *PayStack) PlanUrl() string {
+	if p == nil {
+		panic("didn't initialized paystack")
+	}
+
+	s := fmt.Sprintf("https://%s:%d/plan", p.Host, p.Port)
+	return s
 }
