@@ -2,6 +2,8 @@ package internal
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,8 +24,9 @@ func mockRoutes() http.Handler {
 
 // Test the ControlPanelServer function
 func TestControlPanelServer(t *testing.T) {
+	port := fmt.Sprintf("%d", 9090)
 	// Set the PORT environment variable for testing
-	os.Setenv("PORT", "8080")
+	os.Setenv("PORT", port)
 	defer os.Unsetenv("PORT")
 
 	// Create a channel to listen for shutdown signals
@@ -35,18 +38,20 @@ func TestControlPanelServer(t *testing.T) {
 		// Use the mock routes for testing
 		server := &http.Server{
 			Handler: mockRoutes(),
-			Addr:    ":8080",
+			Addr:    fmt.Sprintf(":%s", port),
 		}
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			t.Fatalf("ListenAndServe: %v", err)
 		}
 	}()
 
 	// Wait for a moment to ensure the server has started
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(600 * time.Millisecond)
 
 	// Make a request to the server to check if it's running
-	resp, err := http.Get("http://localhost:8080/health")
+	url := fmt.Sprintf("http://localhost:%s/health", port)
+	resp, err := http.Get(url)
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
@@ -62,8 +67,9 @@ func TestControlPanelServer(t *testing.T) {
 
 // Test for graceful shutdown
 func TestControlPanelServerShutdown(t *testing.T) {
+	port := fmt.Sprintf("%d", 9090)
 	// Set the PORT environment variable for testing
-	os.Setenv("PORT", "8080")
+	os.Setenv("PORT", port)
 	defer os.Unsetenv("PORT")
 
 	// Create a channel to listen for shutdown signals
@@ -75,9 +81,9 @@ func TestControlPanelServerShutdown(t *testing.T) {
 		// Use the mock routes for testing
 		server := &http.Server{
 			Handler: mockRoutes(),
-			Addr:    ":8080",
+			Addr:    fmt.Sprintf(":%s", port),
 		}
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
 			t.Fatalf("ListenAndServe: %v", err)
 		}
 	}()
