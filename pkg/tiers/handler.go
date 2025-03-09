@@ -99,6 +99,7 @@ func HandleFetchTier(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
 func HandleUpdateTier(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	planCode := chi.URLParam(r, "id")
