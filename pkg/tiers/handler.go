@@ -4,7 +4,6 @@ import (
 	"control-panel-bk/utils"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
-	"log"
 	"net/http"
 )
 
@@ -104,14 +103,15 @@ func HandleUpdateTier(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	planCode := chi.URLParam(r, "id")
 
-	var body UpdateTierRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var updateBody UpdateTierRequest
+	if err := json.NewDecoder(r.Body).Decode(&updateBody); err != nil {
 		utils.ErrorException(w, err, http.StatusInternalServerError)
 		return
 	}
 
-	log.Println("BODY: ", body.CreateTierRequest)
-	updated, updateError, updateStatCde := UpdateTier(planCode, body, r.Context())
+	updateBody.Amount = updateBody.Amount * 100 // We have to multiply the amount by 100 - default paystack rule
+
+	updated, updateError, updateStatCde := UpdateTier(planCode, updateBody, r.Context())
 	if updateError != nil {
 		utils.ErrorException(w, updateError, updateStatCde)
 		return

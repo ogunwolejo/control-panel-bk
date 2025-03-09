@@ -207,7 +207,7 @@ type FetchTiersRequest struct {
 }
 
 type UpdateTierRequest struct {
-	CreateTierRequest,
+	CreateTierRequest
 	UpdateExistingSubscriptions bool `json:"update_existing_subscriptions,omitempty"`
 }
 
