@@ -239,38 +239,21 @@ func CreateTier(tier CreateTierRequest, ctx context.Context) (*TierResponse, err
 	}
 
 	// We need to check if the Tiers exist already
-	fetchTiers := make(chan *FetchTiersResponse)
-	fetchErr := make(chan error)
-	fetchErrCode := make(chan int)
-	go func() {
-		par := FetchTiersRequest{
-			PerPage:  0,
-			Amount:   tier.Amount,
-			Interval: tier.Interval,
-			Page:     1,
-			Status:   "active",
-		}
+	par := FetchTiersRequest{
+		PerPage:  0,
+		Amount:   tier.Amount,
+		Interval: tier.Interval,
+		Page:     1,
+		Status:   "active",
+	}
 
-		t, e, scd := FetchTiers(par, ctx)
-		fetchTiers <- t
-		fetchErr <- e
-		fetchErrCode <- scd
+	existingTiers, err, statusCode := FetchTiers(par, ctx)
+	if err != nil {
+		return nil, err, statusCode
+	}
 
-		close(fetchTiers)
-		close(fetchErr)
-		close(fetchErrCode)
-	}()
-
-	select {
-	case er := <-fetchErr:
-		if er != nil {
-			return nil, er, <-fetchErrCode
-		}
-
-	case list := <-fetchTiers:
-		if len(list.Data) > 0 {
-			return nil, errors.New("an active tier with the same data already exists"), http.StatusOK
-		}
+	if len(existingTiers.Data) > 0 {
+		return nil, errors.New("an active tier with the same data already exists"), http.StatusOK
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
