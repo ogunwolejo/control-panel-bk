@@ -24,6 +24,22 @@ func routes() http.Handler {
 					tierRouterGroup.Put("/{id}", tiers.HandleUpdateTier)
 				})
 			})
+			
+			// The Panel-Admins Sub Routes
+			// Role sub-router
+			r.Route("/roles", func(roleRouter chi.Router) {
+				
+			})
+			
+			// Team sub-router
+			r.Route("/team", func(teamRouter chi.Router) {
+				
+			})
+			
+			// User sub-router
+			r.Route("/user", func(userRouter chi.Router) {
+				
+			})
 
 		})
 	})
