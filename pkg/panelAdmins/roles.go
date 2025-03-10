@@ -3,21 +3,21 @@ package panelAdmins
 import "time"
 
 type Role struct {
-	ID          string
-	Name        string
-	Description string
-	Permission
-	CreatedBy    string
-	UpdatedBy    string
+	ID            string
+	Name          string
+	Description   string
+	Permission    Permission
+	CreatedBy     string
+	UpdatedBy     string
 	ArchiveStatus bool
-	lastModified time.Time
-	createdAt    time.Time
+	lastModified  time.Time
+	createdAt     time.Time
 }
 
 type CRole struct {
-	Name        string
-	Description string
-	Permission
+	Name         string
+	Description  string
+	Permission   Permission
 	CreatedBy    string
 	UpdatedBy    string
 	lastModified time.Time
