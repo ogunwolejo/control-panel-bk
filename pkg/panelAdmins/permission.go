@@ -13,4 +13,4 @@ type Permission struct {
 	Billing    ReadWrite
 }
 
-func (pm *Permission) name() {}
+func (pm *Permission) ConvertToJson() {}
