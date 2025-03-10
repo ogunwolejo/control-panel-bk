@@ -139,13 +139,13 @@ func BenchmarkRoutes(b *testing.B) {
 	// Benchmark for creating tier /api/v1/tier
 	b.Run("BenchmarkCreateTier", func(b *testing.B) {
 		bdy := tiers.CreateTierRequest{
-			Amount: 500,
+			Amount:   500,
 			Interval: tiers.IntervalAnnually,
-			Name: "Benchmark test",
+			Name:     "Benchmark test",
 			Currency: tiers.CurrencyNGN,
 		}
 
-		requestBody,  _ := json.Marshal(bdy)
+		requestBody, _ := json.Marshal(bdy)
 		for i := 0; i < b.N; i++ {
 			resp, err := http.Post(ts.URL+"/api/v1/tier", "application/json", bytes.NewReader(requestBody))
 			if err != nil {
