@@ -2,6 +2,7 @@ package panelAdmins
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -208,7 +209,114 @@ func TestTeam_ArchiveTeam(t *testing.T) {
 
 }
 
-func TestTeam_ChangeTeamLead(t *testing.T) {}
+func TestTeam_ChangeTeamLead(t *testing.T) {
+	type TestOutCome struct {
+		Title           string
+		Tm              Team
+		CurrentLead     TeamMate
+		ProposedLead    TeamMate
+		ExpectedOutcome bool
+		ExpectedError   error
+	}
+
+	tbl := []TestOutCome{
+		{
+			Title: "Test change team lead",
+			Tm: Team{
+				TeamLead: TeamMate{
+					ID: "alex",
+				},
+				TeamMember: []TeamMate{
+					{
+						ID:     "temi",
+						IsLead: false,
+					},
+					{
+						ID:     "alex",
+						IsLead: true,
+					},
+				},
+			},
+			CurrentLead:     TeamMate{ID: "alex"},
+			ProposedLead:    TeamMate{ID: "temi"},
+			ExpectedOutcome: true,
+			ExpectedError:   nil,
+		},
+		{
+			Title: "Test change team lead even though proposed lead is not a team member",
+			Tm: Team{
+				TeamLead: TeamMate{
+					ID:     "grace",
+					IsLead: true,
+				},
+				TeamMember: []TeamMate{
+					{
+						ID:     "grace",
+						IsLead: true,
+					},
+				},
+			},
+			CurrentLead:     TeamMate{ID: "grace"},
+			ExpectedOutcome: true,
+			ExpectedError:   nil,
+			ProposedLead: TeamMate{
+				ID:     "ife",
+				IsLead: false,
+			},
+		},
+		{
+			Title: "Test cannot change team lead",
+			Tm: Team{
+				TeamLead: TeamMate{
+					ID:     "lola",
+					IsLead: true,
+				},
+				TeamMember: []TeamMate{
+					{
+						ID:     "lola",
+						IsLead: true,
+					},
+				},
+			},
+			CurrentLead:     TeamMate{ID: "lola", IsLead: true},
+			ExpectedOutcome: true,
+			ExpectedError:   errors.New(fmt.Sprintf("the current lead of id %s is not accurate with the lead id sent", "lola")),
+			ProposedLead: TeamMate{
+				ID:     "ife",
+				IsLead: false,
+			},
+		},
+	}
+
+	for _, tt := range tbl {
+		tm := tt.Tm
+
+		// We will check to see if the proposed lead is a team member
+		isFound := slices.IndexFunc(tm.TeamMember, func(mate TeamMate) bool {
+			return mate.ID == tt.ProposedLead.ID
+		})
+
+		err := tm.ChangeTeamLead(tt.ProposedLead, tt.CurrentLead)
+
+		if err != nil && isFound == -1 {
+			if len(tm.TeamMember) == len(tt.Tm.TeamMember)+1 {
+				t.Errorf("%s: Expected the length of team member of %d, to increase by 1, resulting in %d", tt.Title, len(tt.Tm.TeamMember), len(tm.TeamMember))
+			}
+		}
+
+		if err != nil && !errors.Is(err, tt.ExpectedError) {
+			t.Errorf("%s: Expected error is %s got %s", tt.Title, tt.ExpectedError.Error(), err.Error())
+		}
+
+		if err != nil && errors.Is(err, tt.ExpectedError) {
+			t.Logf("%s: Expected error is %s got %s", tt.Title, tt.ExpectedError.Error(), err.Error())
+		}
+
+		if err == nil && tm.TeamLead.ID != tt.ProposedLead.ID {
+			t.Errorf("%s: Expected team lead to be %s, got %s", tt.Title, tt.ProposedLead.ID, tm.TeamLead.ID)
+		}
+	}
+}
 
 func TestTeam_DeleteTeam(t *testing.T) {
 	type Table struct {
