@@ -2,6 +2,7 @@ package panelAdmins
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"slices"
 	"strings"
@@ -66,14 +67,46 @@ func (t *Team) RemoveTeamMember(mates []TeamMate) {
 }
 
 func (t *Team) ChangeTeamLead(mate TeamMate, currentLead TeamMate) error {
-	// We must ensure the mate is a member  first
-	//n := slices.CompareFunc(currentLead, t.TeamLead, func(e1 TeamMate, e2 TeamMate) int {
-	//	return strings.Compare(e1.ID, e2.ID)
-	//})
-	//
-	//if t.IsMember(mate) && n == 0 {
-	//	return nil
-	//}
+	if t.TeamLead.ID != currentLead.ID {
+		return errors.New(fmt.Sprintf("the current lead of id %s is not accurate with the lead id sent", currentLead.ID))
+	}
+
+	if !t.IsMember(mate) {
+		nm := make([]TeamMate, 1)
+		nm = append(nm, mate)
+		if err := t.AddNewTeamMember(nm); err != nil {
+			return err // errors.New("unable to add proposed team lead to the team as the user is not a team member")
+		}
+	}
+
+	// Change the Team Member Status
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+
+	for _, member := range t.TeamMember {
+		wg.Add(1)
+
+		go func(mt TeamMate) {
+			defer wg.Done()
+
+			mutex.Lock()
+			defer mutex.Unlock()
+
+			// We set previous team lead to false
+			if member.ID != mt.ID && member.IsLead {
+				member.IsLead = false
+			}
+
+			// We change the team lead
+			if member.ID == mt.ID && !member.IsLead {
+				member.IsLead = true
+				t.TeamLead = member
+			}
+
+		}(mate)
+		wg.Wait()
+	}
+
 	return nil
 }
 
