@@ -2,6 +2,8 @@ package panelAdmins
 
 import (
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -259,7 +261,120 @@ func TestTeam_DeleteTeam(t *testing.T) {
 
 }
 
-func TestTeam_RemoveTeamMember(t *testing.T) {}
+func TestTeam_RemoveTeamMember(t *testing.T) {
+	type TestOutCome struct {
+		Title           string
+		Tm              Team
+		RemoveMembers   []TeamMate
+		ExpectedMembers []TeamMate
+	}
+
+	tb := []TestOutCome{
+		{
+			Title: "Test some members to be removed",
+			Tm: Team{
+				TeamMember: []TeamMate{
+					{
+						ID:     "james",
+						IsLead: false,
+					},
+					{
+						ID:     "john",
+						IsLead: false,
+					},
+					{
+						ID:     "isaac",
+						IsLead: false,
+					},
+					{
+						ID:     "grace",
+						IsLead: false,
+					},
+				},
+			},
+			RemoveMembers: []TeamMate{
+				{
+					ID: "isaac",
+				},
+				{
+					ID: "grace",
+				},
+			},
+			ExpectedMembers: []TeamMate{
+				{
+					ID: "james",
+				},
+				{
+					ID: "john",
+				},
+			},
+		},
+
+		{
+			Title: "Test only non team lead members are removed",
+			Tm: Team{
+				TeamMember: []TeamMate{
+					{
+						ID:     "james",
+						IsLead: false,
+					},
+					{
+						ID:     "john",
+						IsLead: false,
+					},
+					{
+						ID:     "bale",
+						IsLead: true,
+					},
+					{
+						ID:     "grace",
+						IsLead: false,
+					},
+				},
+			},
+			RemoveMembers: []TeamMate{
+				{
+					ID: "bale",
+				},
+				{
+					ID: "grace",
+				},
+			},
+			ExpectedMembers: []TeamMate{
+				{
+					ID: "james",
+				},
+				{
+					ID: "john",
+				},
+				{
+					ID: "bale",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tb {
+		tm := tt.Tm
+		tm.RemoveTeamMember(tt.RemoveMembers)
+
+		if len(tt.ExpectedMembers) != len(tm.TeamMember) {
+			t.Errorf("%s: The expected length of the team members (%d) is not equal to the outcome %d", tt.Title, len(tt.ExpectedMembers), len(tm.TeamMember))
+		}
+
+		n := slices.CompareFunc(tt.ExpectedMembers, tm.TeamMember, func(mate TeamMate, mate2 TeamMate) int {
+			return strings.Compare(mate.ID, mate2.ID)
+		})
+
+		if n == 0 {
+			t.Logf("%s: the expected outcome length is %d, got remaining team members length is %d", tt.Title, len(tt.ExpectedMembers), len(tm.TeamMember))
+		} else if n == -1 {
+			t.Errorf("%s: the expected outcome in terms of length which is %d is less than result %d", tt.Title, len(tt.ExpectedMembers), len(tm.TeamMember))
+		} else if n == 1 {
+			t.Errorf("%s: the expected outcome in terms of length which is %d is greater than result %d", tt.Title, len(tt.ExpectedMembers), len(tm.TeamMember))
+		}
+	}
+}
 
 func TestTeam_UnArchiveTeam(t *testing.T) {
 	type Table struct {
@@ -304,9 +419,162 @@ func TestTeam_UnArchiveTeam(t *testing.T) {
 	}
 }
 
+func TestTeam_SortTeamMembers(t *testing.T) {
+	type TestKit struct {
+		Title           string
+		Team            Team
+		ExpectedMembers []TeamMate
+	}
+
+	table := []TestKit{
+		{
+			Title: "Testing sorted team members and result is equals to the expected outcome",
+			Team: Team{
+				TeamMember: []TeamMate{
+					{
+						ID: "Mary",
+					},
+					{
+						ID: "Cyan",
+					},
+					{
+						ID: "Lizzy",
+					},
+				},
+			},
+			ExpectedMembers: []TeamMate{
+				{
+					ID: "Cyan",
+				},
+				{
+					ID: "Lizzy",
+				},
+				{
+					ID: "Mary",
+				},
+			},
+		},
+		{
+			Title: "Testing sorted team members and result is equals to the expected outcome",
+			Team: Team{
+				TeamMember: []TeamMate{
+					{
+						ID: "Abraham",
+					},
+					{
+						ID: "Ruth",
+					},
+					{
+						ID: "daniel",
+					},
+					{
+						ID: "Alexander",
+					},
+				},
+			},
+			ExpectedMembers: []TeamMate{
+				{
+					ID: "Abraham",
+				},
+				{
+					ID: "Alexander",
+				},
+				{
+					ID: "Ruth",
+				},
+				{
+					ID: "daniel",
+				},
+			},
+		},
+	}
+
+	for _, tt := range table {
+		tm := tt.Team
+
+		tm.SortTeamMembers()
+
+		n := slices.CompareFunc(tm.TeamMember, tt.ExpectedMembers, func(mate TeamMate, mate2 TeamMate) int {
+			return strings.Compare(mate.ID, mate2.ID)
+		})
+
+		if n == 0 {
+			t.Logf("%s: The two slice are equal", tt.Title)
+		} else if n == -1 {
+			t.Logf("%s: The two slice are not equal, hence outcome length %d is less than expected length of %d", tt.Title, len(tm.TeamMember), len(tt.ExpectedMembers))
+		} else if n == 1 {
+			t.Logf("%s: The two slice are not equal, hence outcome length %d is greater than expected length of %d", tt.Title, len(tm.TeamMember), len(tt.ExpectedMembers))
+		}
+	}
+}
+
 func TestTeam_UpdateTeamDataInDB(t *testing.T) {}
 
-func TestTeam_IsMember(t *testing.T) {}
+func TestTeam_IsMember(t *testing.T) {
+	type Outcome struct {
+		Title           string
+		Team            Team
+		SearchMember    TeamMate
+		ExpectedOutcome bool
+	}
+
+	tst := []Outcome{
+		{
+			"Test is member should return true",
+			Team{
+				TeamMember: []TeamMate{
+					{
+						ID: "Josh",
+					},
+					{
+						ID: "lizzy",
+					},
+					{
+						ID: "james",
+					},
+				},
+			},
+			TeamMate{
+				ID: "lizzy",
+			},
+			true,
+		},
+		{
+			"Test is member should return false",
+			Team{
+				TeamMember: []TeamMate{
+					{
+						ID: "Josh",
+					},
+					{
+						ID: "lizzy",
+					},
+					{
+						ID: "james",
+					},
+				},
+			},
+			TeamMate{
+				ID: "bt",
+			},
+			false,
+		},
+	}
+
+	for _, tt := range tst {
+		tm := tt.Team
+
+		ok := tm.IsMember(tt.SearchMember)
+
+		if ok == tt.ExpectedOutcome {
+			t.Logf("%s: The expected outcome is %v, but got %v", tt.Title, tt.ExpectedOutcome, ok)
+		}
+
+		if ok != tt.ExpectedOutcome {
+			t.Errorf("%s: The expected outcome is %v, but got %v", tt.Title, tt.ExpectedOutcome, ok)
+		}
+	}
+}
 
 func TestGetTeam(t *testing.T) {}
 

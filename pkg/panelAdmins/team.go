@@ -3,6 +3,9 @@ package panelAdmins
 import (
 	"errors"
 	"log"
+	"slices"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -32,24 +35,67 @@ type Team struct {
 func (t *Team) AddNewTeamMember(member []TeamMate) error {
 	tm := append(t.TeamMember, member...)
 	t.TeamMember = tm
+	t.SortTeamMembers()
 	return nil
 }
 
-func (t *Team) RemoveTeamMember(mate []TeamMate) error {
-	// We will use waitGroups
-	log.Println("Team Member B4 Removing selected ID : ", t.TeamMember)
-	// We will use the slice methods here
-	return nil
+func (t *Team) RemoveTeamMember(mates []TeamMate) {
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+
+	for _, mate := range mates {
+		wg.Add(1)
+
+		go func(mate TeamMate) {
+			defer wg.Done()
+
+			mutex.Lock() // we lock the state, so that while we are performing some action nothing can be added or removed from the team members
+			defer mutex.Unlock()
+
+			for i, member := range t.TeamMember {
+				if member.ID == mate.ID && !member.IsLead {
+					t.TeamMember = append(t.TeamMember[:i], t.TeamMember[i+1:]...)
+					break
+				}
+			}
+
+		}(mate)
+
+		wg.Wait()
+	}
 }
 
-func (t *Team) ChangeTeamLead(mate TeamMate) error {
+func (t *Team) ChangeTeamLead(mate TeamMate, currentLead TeamMate) error {
 	// We must ensure the mate is a member  first
+	//n := slices.CompareFunc(currentLead, t.TeamLead, func(e1 TeamMate, e2 TeamMate) int {
+	//	return strings.Compare(e1.ID, e2.ID)
+	//})
+	//
+	//if t.IsMember(mate) && n == 0 {
+	//	return nil
+	//}
 	return nil
+}
+
+func (t *Team) SortTeamMembers() {
+	slices.SortStableFunc(t.TeamMember, func(a, b TeamMate) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	log.Println(t.TeamMember)
 }
 
 func (t *Team) IsMember(mate TeamMate) bool {
-	//n, isFound := slices.BinarySearch(t.TeamMember, mate)
-	return true
+	if isSorted := slices.IsSortedFunc(t.TeamMember, func(a, b TeamMate) int {
+		return strings.Compare(a.ID, b.ID)
+	}); !isSorted {
+		t.SortTeamMembers()
+	}
+
+	_, isFound := slices.BinarySearchFunc(t.TeamMember, mate, func(a, b TeamMate) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+
+	return isFound
 }
 
 func (t *Team) ArchiveTeam() error {
