@@ -3,6 +3,7 @@ package panelAdmins
 import (
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"log"
 	"slices"
 	"strings"
@@ -11,26 +12,25 @@ import (
 )
 
 type TeamMate struct {
-	ID      string
-	Name    string
-	Role    Role
-	Gender  string
-	Email   string
-	Phone   string
-	Profile string
-	IsLead  bool
+	gorm.Model
+	ID     string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4();autoIncrement:false" json:"id;omitempty"`
+	User   User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	UserId string `gorm:"type:uuid;not null" json:"userId"`
+	IsLead bool   `json:"isLead" gorm:"default:false"`
 }
 
 type Team struct {
-	ID            string
-	TeamLead      TeamMate
-	TeamMember    []TeamMate
-	LastModified  time.Time
-	CreatedAt     time.Time
-	CreatedBy     string
-	ModifiedBy    string
-	ArchiveStatus bool
-	DeletedStatus bool
+	gorm.Model
+	ID            string         `gorm:"primaryKey;type:uuid;default:uuid_generate_v4();autoIncrement:false" json:"id;omitempty"`
+	TeamLead      TeamMate       `json:"teamLead"`
+	TeamMember    []TeamMate     `json:"teamMember"`
+	LastModified  time.Time      `json:"lastModified;omitempty;" gorm:"autoUpdateTime"`
+	CreatedAt     time.Time      `json:"createdAt;omitempty;" gorm:"autoCreateTime"`
+	CreatedBy     string         `json:"createdBy"`
+	ModifiedBy    string         `json:"modifiedBy"`
+	ArchiveStatus bool           `json:"archiveStatus"`
+	DeletedStatus bool           `json:"deletedStatus;omitempty" gorm:"type:false"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"deletedAt,omitempty"`
 }
 
 func (t *Team) AddNewTeamMember(member []TeamMate) error {
