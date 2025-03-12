@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"control-panel-bk/internal/database"
 	"errors"
 	"fmt"
 	"log"
@@ -12,9 +13,16 @@ import (
 	"time"
 )
 
+type Database interface {
+	error
+}
+
 func ControlPanelServer() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+
+	// Connect to various database
+	database.InitializeAllDbs(database.Dbs)
 
 	server := &http.Server{
 		Handler: routes(),

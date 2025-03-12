@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 )
 
 var prm = Permission{
@@ -20,64 +19,13 @@ var prm = Permission{
 var mockTeam = Team{
 	TeamMember: []TeamMate{
 		{
-			Name: "James",
-			Role: Role{
-				Name:          "Admin",
-				createdAt:     time.Date(2021, time.April, 5, 3, 0, 0, 1, time.UTC),
-				CreatedBy:     "123",
-				UpdatedBy:     "123",
-				ArchiveStatus: false,
-				Description:   "",
-				ID:            "role 1",
-				lastModified:  time.Date(2021, time.April, 5, 3, 30, 15, 2, time.UTC),
-				Permission:    prm,
-			},
-			ID:      "Mem 1",
-			Email:   "member1@gmail.com",
-			Phone:   "09031846448",
-			Gender:  "Male",
-			IsLead:  false,
-			Profile: "pic",
+			ID: "Mem 1",
 		},
 		{
-			Name: "Peter",
-			Role: Role{
-				Name:          "Sales",
-				createdAt:     time.Date(2021, time.November, 5, 3, 0, 0, 1, time.UTC),
-				CreatedBy:     "123",
-				UpdatedBy:     "123",
-				ArchiveStatus: false,
-				Description:   "",
-				ID:            "role 2",
-				lastModified:  time.Date(2021, time.November, 5, 3, 30, 15, 2, time.UTC),
-				Permission:    prm,
-			},
-			ID:      "Mem 2",
-			Email:   "member2@gmail.com",
-			Phone:   "09031846447",
-			Gender:  "Male",
-			IsLead:  true,
-			Profile: "pic",
+			ID: "Mem 2",
 		},
 		{
-			Name: "Lizzy",
-			Role: Role{
-				Name:          "HR",
-				createdAt:     time.Date(2021, time.May, 5, 3, 0, 0, 1, time.UTC),
-				CreatedBy:     "123",
-				UpdatedBy:     "123",
-				ArchiveStatus: false,
-				Description:   "",
-				ID:            "role 3",
-				lastModified:  time.Date(2021, time.May, 5, 3, 30, 15, 2, time.UTC),
-				Permission:    prm,
-			},
-			ID:      "Mem 3",
-			Email:   "member3@gmail.com",
-			Phone:   "09031846448",
-			Gender:  "Male",
-			IsLead:  false,
-			Profile: "pic",
+			ID: "Mem 3",
 		},
 	},
 }
@@ -99,31 +47,15 @@ func TestTeam_AddNewTeamMember(t *testing.T) {
 			len(mockTeam.TeamMember) + 3,
 			[]TeamMate{
 				{
-					Profile: "new profile 1",
-					IsLead:  false,
-					Gender:  "female",
-					Phone:   "0810678908",
-					ID:      "new 123",
-					Name:    "Younger1",
-					Email:   "newmem1@gmail.com",
+					IsLead: false,
+					ID:     "new 123",
 				},
 				{
-					Profile: "new profile 2",
-					IsLead:  false,
-					Gender:  "female",
-					Phone:   "0810678908",
-					ID:      "new 123",
-					Name:    "Younger2",
-					Email:   "newmem2@gmail.com",
+					IsLead: false,
+					ID:     "new 123",
 				},
 				{
-					Profile: "new profile 3",
-					IsLead:  false,
-					Gender:  "female",
-					Phone:   "0810678908",
-					ID:      "new 123",
-					Name:    "Younger3",
-					Email:   "newmem3@gmail.com",
+					ID: "new 123",
 				},
 			},
 		},
@@ -134,13 +66,7 @@ func TestTeam_AddNewTeamMember(t *testing.T) {
 			len(mockTeam.TeamMember) + 1,
 			[]TeamMate{
 				{
-					Profile: "new profile 1",
-					IsLead:  false,
-					Gender:  "female",
-					Phone:   "0810678908",
-					ID:      "new 123",
-					Name:    "Younger1",
-					Email:   "newmem1@gmail.com",
+					ID: "new 123",
 				},
 			},
 		},
