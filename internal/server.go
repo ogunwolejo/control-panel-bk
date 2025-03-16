@@ -2,7 +2,8 @@ package internal
 
 import (
 	"context"
-	"control-panel-bk/internal/database"
+	"control-panel-bk/config"
+	"control-panel-bk/internal/aws"
 	"errors"
 	"fmt"
 	"log"
@@ -13,16 +14,23 @@ import (
 	"time"
 )
 
-type Database interface {
-	error
-}
-
 func ControlPanelServer() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// Connect to various database
-	database.InitializeAllDbs(database.Dbs)
+	// Load AWS Configuration
+	go func() {
+		if err := config.LoadAwsConfiguration(); err != nil {
+			log.Fatalln(err)
+		}
+	}()
+
+	// Load MongoDB
+	go func() {
+		if _, err := aws.ConnectMongoDB(); err != nil {
+			log.Print("Error MongoDB: ", err)
+		}
+	}()
 
 	server := &http.Server{
 		Handler: routes(),
