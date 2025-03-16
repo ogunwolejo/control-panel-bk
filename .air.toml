@@ -1,0 +1,13 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/controlPanelApp ./cmd"
+bin = "tmp/controlPanelApp"
+delay = 1000
+exclude_dir = ["vendor", "tmp", "bin"]
+include_ext = ["go", "html", "tmpl", "tpl"]
+log = "air.log"
+
+[log]
+time = true

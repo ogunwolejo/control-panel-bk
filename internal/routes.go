@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"control-panel-bk/pkg/panelAdmins"
 	"control-panel-bk/pkg/tiers"
 	"github.com/go-chi/chi/v5"
 	"net/http"
@@ -24,21 +25,22 @@ func routes() http.Handler {
 					tierRouterGroup.Put("/{id}", tiers.HandleUpdateTier)
 				})
 			})
-			
+
 			// The Panel-Admins Sub Routes
 			// Role sub-router
 			r.Route("/roles", func(roleRouter chi.Router) {
-				
+				roleRouter.Post("/", panelAdmins.HandleCreateRole)
+				roleRouter.Get("/{id}", panelAdmins.HandleFetchRole)
 			})
-			
+
 			// Team sub-router
 			r.Route("/team", func(teamRouter chi.Router) {
-				
+
 			})
-			
+
 			// User sub-router
 			r.Route("/user", func(userRouter chi.Router) {
-				
+
 			})
 
 		})

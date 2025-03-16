@@ -3,7 +3,7 @@ package tiers
 import (
 	"bytes"
 	"context"
-	"control-panel-bk/utils"
+	"control-panel-bk/util"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"net/http"
@@ -51,7 +51,7 @@ var mockCreateTier = func(w http.ResponseWriter, r *http.Request) {
 	respBytes, _ := json.Marshal(resp)
 
 	if err != nil {
-		utils.ErrorException(w, err, code)
+		util.ErrorException(w, err, code)
 		return
 	}
 
@@ -157,7 +157,7 @@ var mockFetchTiers = func(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	if err != nil {
-		utils.ErrorException(w, err, cde)
+		util.ErrorException(w, err, cde)
 		return
 	}
 
@@ -273,7 +273,7 @@ func TestHandleFetchTier(t *testing.T) {
 
 		response, err, code := mockGetTier(phoneCode, request.Context())
 		if err != nil {
-			utils.ErrorException(writer, err, code)
+			util.ErrorException(writer, err, code)
 			return
 		}
 
@@ -334,7 +334,7 @@ func TestHandleUpdateTier(t *testing.T) {
 		resp, err, code := mockUpdateTier(planCode, requestBody, request.Context())
 
 		if err != nil {
-			utils.ErrorException(writer, err, code)
+			util.ErrorException(writer, err, code)
 			return
 		}
 
