@@ -54,6 +54,11 @@ $ go run cmd/main.go
     docker-compose down
 ```
 
+### Restart Services Without Rebuilding
+```bash
+    docker-compose up -d --force-recreate <service_name>
+```
+
 ### STOP DOCKER COMPOSE <SPECIFIC SERVICE>
 ```bash
     docker-compose down <service-name> || docker-compose stop <service-name>

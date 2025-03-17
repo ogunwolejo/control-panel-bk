@@ -27,10 +27,10 @@ services:
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: echo 'db.runCommand({ping:1})' | mongosh --quiet mongodb:27017/test --eval "db.runCommand({ping:1})"
-      interval: 10s
-      timeout: 10s
-      retries: 5
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1})" ]
+      interval: 3000s
+      timeout: 1500s
+      retries: 2
     networks:
       - app-network
     environment:
@@ -52,7 +52,6 @@ services:
       MONGO_URI: "mongodb://admin:password@mongodb:27017/flowCx?authSource=admin"
     networks:
       - app-network
-
 
 volumes:
   mongodb_data:
