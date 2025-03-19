@@ -34,7 +34,7 @@ func routes() http.Handler {
 				roleRouter.Get("/{id}", panelAdmins.HandleFetchRoleById)
 				roleRouter.Get("/name", panelAdmins.HandleFetchRoleByName) // takes the query params page and limit
 
-				roleRouter.Put("/update", panelAdmins.HandleGeneralUpdate)
+				roleRouter.Patch("/update", panelAdmins.HandleGeneralUpdate)
 				roleRouter.Patch("/archive", panelAdmins.HandleArchiveRole)
 				roleRouter.Patch("/unarchive", panelAdmins.HandleUnArchiveRole)
 				roleRouter.Patch("/bin", panelAdmins.HandlePushRoleToBin)

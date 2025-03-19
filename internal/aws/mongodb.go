@@ -39,11 +39,23 @@ func connect() (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
 	defer cancel()
 
-	log.Printf("MONGO DB URL %s", os.Getenv("AWS_MONGO_DB_URL"))
-	client, err := mongo.Connect(options.Client().ApplyURI(os.Getenv("AWS_MONGO_DB_URL")))
+	bsonOpts := &options.BSONOptions{
+		UseJSONStructTags:   true, // Replaces the bson struct tags with json struct tags
+		ObjectIDAsHexString: true, // Allows the ObjectID to be marshalled as a string
+		NilSliceAsEmpty:     true,
+		UseLocalTimeZone:    false,
+	}
+
+	client, err := mongo.Connect(options.Client().SetBSONOptions(bsonOpts).ApplyURI(os.Getenv("AWS_MONGO_DB_URL")))
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		if err := client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		return nil, err

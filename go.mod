@@ -11,8 +11,9 @@ require (
 	github.com/go-chi/cors v1.2.1
 	github.com/gofrs/uuid v4.0.0+incompatible
 	github.com/google/go-querystring v1.1.0
+	github.com/joho/godotenv v1.5.1
+	go.mongodb.org/mongo-driver v1.17.3
 	go.mongodb.org/mongo-driver/v2 v2.1.0
-	gorm.io/gorm v1.25.12
 )
 
 require (
@@ -28,8 +29,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17 // indirect
 	github.com/aws/smithy-go v1.22.3 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
-	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
