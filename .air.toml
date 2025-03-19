@@ -4,8 +4,8 @@ tmp_dir = "tmp"
 
 [build]
   args_bin = []
-  bin = "tmp/controlPanelApp"
-  cmd = "go build -o ./tmp/controlPanelApp ./cmd/main.go"
+  bin = "tmp/main" # Docker ->"tmp/controlPanelApp"
+  cmd = "go run ./cmd/main.go" # Docker -> "go build -o ./tmp/controlPanelApp ./cmd/main.go"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []

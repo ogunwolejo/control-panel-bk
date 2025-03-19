@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/go-chi/chi/v5"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -29,7 +30,13 @@ func HandleCreateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respBytes, e := json.Marshal(output)
+	response := Response{
+		Status: http.StatusCreated,
+		error:  nil,
+		Data:   output,
+	}
+
+	respBytes, e := json.Marshal(&response)
 	if e != nil {
 		util.ErrorException(w, e, http.StatusInternalServerError)
 		return
@@ -53,7 +60,13 @@ func HandleFetchRoleByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respBytes, e := json.Marshal(roles)
+	response := Response{
+		Status: http.StatusOK,
+		error:  nil,
+		Data:   roles,
+	}
+
+	respBytes, e := json.Marshal(&response)
 	if e != nil {
 		util.ErrorException(w, e, http.StatusInternalServerError)
 		return
@@ -69,12 +82,15 @@ func HandleFetchRoleByName(w http.ResponseWriter, r *http.Request) {
 
 func HandleFetchRoleById(w http.ResponseWriter, r *http.Request) {
 	roleId := chi.URLParam(r, "id")
+
 	result, err, cde := FetchRoleById(roleId, r.Context())
 
 	if err != nil {
 		util.ErrorException(w, err, cde)
 		return
 	}
+
+	log.Println("RESULT GOTTEN FROM FETCHING ROLE BY ID: ", result)
 
 	resp, respErr := json.Marshal(&result)
 	if respErr != nil {
@@ -96,6 +112,10 @@ func HandleFetchRoles(w http.ResponseWriter, r *http.Request) {
 	page := query.Get("page")
 	limit := query.Get("limit")
 
+	var pgQuery, ltQuery int
+
+	log.Printf("QUERY: %s - %s", page, limit)
+
 	pg, pgErr := strconv.Atoi(page)
 	if pgErr != nil {
 		util.ErrorException(w, pgErr, http.StatusInternalServerError)
@@ -108,14 +128,23 @@ func HandleFetchRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err, code := FetchRoles(pg, lt, r.Context())
+	pgQuery = pg
+	ltQuery = lt
+
+	result, err, code := FetchRoles(pgQuery, ltQuery, r.Context())
 
 	if err != nil {
 		util.ErrorException(w, err, code)
 		return
 	}
 
-	if respBytes, err := json.Marshal(&result); err != nil {
+	response := Response{
+		Status: code,
+		error:  nil,
+		Data:   result,
+	}
+
+	if respBytes, err := json.Marshal(&response); err != nil {
 		util.ErrorException(w, err, http.StatusInternalServerError)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
@@ -141,9 +170,21 @@ func HandleHardDeleteOfRole(w http.ResponseWriter, r *http.Request) {
 		util.ErrorException(w, err, code)
 		return
 	} else {
+		deleteRes := Response{
+			Status: code,
+			error: nil,
+			Data: id,
+		}
+
+		deleteBytes, delErr := json.Marshal(&deleteRes)
+		if delErr != nil {
+			util.ErrorException(w, delErr, http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(code)
-		if _, err := w.Write([]byte(*id)); err != nil {
+		if _, err := w.Write(deleteBytes); err != nil {
 			util.ErrorException(w, err, http.StatusInternalServerError)
 		}
 	}
@@ -159,17 +200,26 @@ func HandleGeneralUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updateDoc, updateError := body.GeneralizedUpdate(r.Context())
+	updateDoc, updateError, code := body.GeneralizedUpdate(r.Context())
 	if updateError != nil {
-		util.ErrorException(w, updateError, http.StatusOK)
+		util.ErrorException(w, updateError, code)
+		return
 	}
 
-	respBytes, respErr := json.Marshal(&updateDoc)
+	resp := Response{
+		Status: http.StatusAccepted,
+		error: nil,
+		Data: updateDoc,
+	}
+
+	respBytes, respErr := json.Marshal(&resp)
 	if respErr != nil {
 		util.ErrorException(w, respErr, http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
 	if _, err := w.Write(respBytes); err != nil {
 		util.ErrorException(w, err, http.StatusInternalServerError)
 	}
@@ -184,14 +234,14 @@ func HandleArchiveRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, docErr := role.ArchiveRole(r.Context())
+	doc, docErr, code := role.ArchiveRole(r.Context())
 	if docErr != nil {
 		if errors.Is(docErr, errors.New("no document was found")) {
-			util.ErrorException(w, docErr, http.StatusOK)
+			util.ErrorException(w, docErr, code)
 			return
 		}
 
-		util.ErrorException(w, docErr, http.StatusNotFound)
+		util.ErrorException(w, docErr, code)
 		return
 	}
 
@@ -202,7 +252,7 @@ func HandleArchiveRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(code)
 	if _, err := w.Write(archBytes); err != nil {
 		util.ErrorException(w, err, http.StatusInternalServerError)
 	}
@@ -218,25 +268,31 @@ func HandleUnArchiveRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, docErr := role.UnArchiveRole(r.Context())
+	doc, docErr, code := role.UnArchiveRole(r.Context())
 	if docErr != nil {
 		if errors.Is(docErr, errors.New("no document was found")) {
-			util.ErrorException(w, docErr, http.StatusOK)
+			util.ErrorException(w, docErr, code)
 			return
 		}
 
-		util.ErrorException(w, docErr, http.StatusNotFound)
+		util.ErrorException(w, docErr, code)
 		return
 	}
 
-	unArchBytes, unArchErr := json.Marshal(&doc)
+	response := Response{
+		Status: code,
+		error:  nil,
+		Data:   doc,
+	}
+
+	unArchBytes, unArchErr := json.Marshal(&response)
 	if unArchErr != nil {
 		util.ErrorException(w, unArchErr, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(code)
 	if _, err := w.Write(unArchBytes); err != nil {
 		util.ErrorException(w, err, http.StatusInternalServerError)
 	}
@@ -251,25 +307,31 @@ func HandlePushRoleToBin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bin, binErr := role.DeleteRole(r.Context())
+	bin, binErr, code := role.DeleteRole(r.Context())
 	if binErr != nil {
 		if errors.Is(binErr, errors.New("no document was found")) {
-			util.ErrorException(w, binErr, http.StatusOK)
+			util.ErrorException(w, binErr, code)
 			return
 		}
 
-		util.ErrorException(w, binErr, http.StatusNotFound)
+		util.ErrorException(w, binErr, code)
 		return
 	}
 
-	binByte, bbErr := json.Marshal(&bin)
+	response := Response{
+		Status: code,
+		error:  nil,
+		Data:   bin,
+	}
+
+	binByte, bbErr := json.Marshal(&response)
 	if bbErr != nil {
 		util.ErrorException(w, bbErr, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(code)
 	if _, err := w.Write(binByte); err != nil {
 		util.ErrorException(w, bbErr, http.StatusInternalServerError)
 	}

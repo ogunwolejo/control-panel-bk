@@ -18,7 +18,9 @@ func appMiddleware(m *chi.Mux) {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+	m.Use(middleware.NoCache) // No caching
 	m.Use(middleware.AllowContentEncoding("application/json", "text/xml"))
+	m.Use(middleware.Compress(5, "application/json", "application/text"))
 	m.Use(middleware.Heartbeat("/ping"))
 	m.Use(middleware.RequestID)
 	m.Use(middleware.CleanPath)

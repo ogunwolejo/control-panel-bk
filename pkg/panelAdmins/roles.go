@@ -4,11 +4,13 @@ import (
 	"context"
 	"control-panel-bk/internal/aws"
 	"errors"
+	"fmt"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -18,27 +20,31 @@ type CreateRoleResponse struct {
 	Data    *mongo.InsertOneResult
 }
 
+type Response struct {
+	Status int
+	error  error
+	Data   interface{}
+}
+
 type Role struct {
-	ID              string     `json:"_id" bson:"_id"`
-	Name            string     `json:"name" bson:"name"`
-	Description     string     `json:"description,omitempty" bson:"description,omitempty"`
-	Permission      Permission `json:"permission" bson:"permission"`
-	CreatedBy       string     `json:"createdBy" bson:"created_by"`
-	UpdatedBy       string     `json:"updatedBy" bson:"updated_by"`
-	ArchiveStatus   bool       `json:"archiveStatus" bson:"archive_status"`
-	IsDeletedStatus bool       `json:"is_deleted_status" bson:"is_deleted_status"`
-	UpdatedAt       time.Time  `json:"UpdatedAt,omitempty" bson:"updated_at"`
-	CreatedAt       time.Time  `json:"createdAt,omitempty" bson:"created_at"`
+	ID              string     `json:"_id"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description,omitempty"`
+	Permission      Permission `json:"permission"`
+	CreatedBy       string     `json:"created_by"`
+	UpdatedBy       string     `json:"updated_by"`
+	ArchiveStatus   bool       `json:"archive_status"`
+	IsDeletedStatus bool       `json:"is_deleted_status"`
+	UpdatedAt       time.Time  `json:"updated_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at,omitempty"`
 }
 
 type CRole struct {
-	Name        string     `json:"name" bson:"name"`
-	Description string     `json:"description,omitempty" bson:"description,omitempty"`
-	Permission  Permission `json:"permission" bson:"permission"`
-	CreatedBy   string     `json:"createdBy" bson:"created_by"`
-	UpdatedBy   string     `json:"updatedBy" bson:"updated_by"`
-	UpdatedAt   time.Time  `json:"UpdatedAt,omitempty" bson:"updated_at"`
-	CreatedAt   time.Time  `json:"createdAt,omitempty" bson:"created_at"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Permission  Permission `json:"permission"`
+	CreatedBy   string     `json:"created_by"`
+	UpdatedBy   string     `json:"updated_by"`
 }
 
 func getDB() *mongo.Database {
@@ -48,46 +54,65 @@ func getDB() *mongo.Database {
 	return aws.MongoFlowCxDBClient
 }
 
-func (rl *Role) GeneralizedUpdate(ctx context.Context) (*Role, error) {
+func getPrimitiveID(id string) (*bson.ObjectID, error) {
+	objId, err := bson.ObjectIDFromHex(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &objId, nil
+}
+
+func (rl *Role) GeneralizedUpdate(ctx context.Context) (*Role, error, int) {
 	db := getDB()
 
+	objId, objErr := getPrimitiveID(rl.ID)
+	if objErr != nil {
+		return nil, objErr, http.StatusInternalServerError
+	}
+
 	filter := bson.M{
-		"_id": rl.ID,
+		"_id": objId,
 	}
 
 	update := bson.M{
 		"$set": bson.M{
-			"name":              rl.Name,
-			"description":       rl.Description,
-			"permission":        rl.Permission,
-			"update_by":         rl.UpdatedBy,
-			"archive_status":    rl.ArchiveStatus,
-			"is_deleted_status": rl.IsDeletedStatus,
-			"updated_at":        time.Now().UTC(),
+			"name":        rl.Name,
+			"description": rl.Description,
+			"permission":  rl.Permission,
+			"update_by":   rl.UpdatedBy,
+			"updated_at":  time.Now().UTC(),
 		},
 	}
 
-	updated := db.Collection("roles").FindOneAndUpdate(ctx, filter, update)
+	fuOpts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := db.Collection("roles").FindOneAndUpdate(ctx, filter, update, fuOpts).Decode(&rl)
 
-	if updated.Err() != nil {
-		if errors.Is(updated.Err(), mongo.ErrNoDocuments) {
-			return nil, errors.New("no role with the selected metrics were found")
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("no role with the selected metrics were found"), http.StatusOK
 		}
 
-		return nil, updated.Err()
+		return nil, err, http.StatusNotFound
 	}
 
-	if err := updated.Decode(rl); err != nil {
-		return nil, err
-	}
-
-	return rl, nil
+	return rl, nil, http.StatusOK
 }
 
-func (rl *Role) UnArchiveRole(ctx context.Context) (*Role, error) {
+func (rl *Role) UnArchiveRole(ctx context.Context) (*Role, error, int) {
 	db := getDB()
 
-	filter := bson.D{{"_id", rl.ID}}
+	if !rl.ArchiveStatus {
+		return nil, fmt.Errorf("role %s is not archived, hence this task cannot be performed", rl.Name), http.StatusBadRequest
+	}
+
+	objId, objErr := getPrimitiveID(rl.ID)
+	if objErr != nil {
+		return nil, objErr, http.StatusInternalServerError
+	}
+
+	filter := bson.D{{"_id", objId}}
 
 	update := bson.M{
 		"$set": bson.M{
@@ -97,35 +122,32 @@ func (rl *Role) UnArchiveRole(ctx context.Context) (*Role, error) {
 		},
 	}
 
-	updated, err := db.Collection("roles").UpdateOne(ctx, filter, update)
+	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := db.Collection("roles").FindOneAndUpdate(ctx, filter, update, opt).Decode(rl)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, errors.New("no document was found")
+			return nil, fmt.Errorf("no role named %s, was found", rl.Name), http.StatusOK
 		}
-		return nil, err
+
+		return nil, err, http.StatusNotFound
 	}
 
-	if updated.ModifiedCount == 0 {
-		return nil, errors.New("could not be un-archive role, try again")
-	} else {
-		single := db.Collection("roles").FindOne(ctx, bson.M{"_id": rl.ID})
-
-		if single.Err() != nil {
-			return nil, single.Err()
-		}
-
-		if err := single.Decode(rl); err != nil {
-			return nil, err
-		}
-	}
-
-	return rl, nil
+	return rl, nil, http.StatusOK
 }
 
-func (rl *Role) ArchiveRole(ctx context.Context) (*Role, error) {
+func (rl *Role) ArchiveRole(ctx context.Context) (*Role, error, int) {
+	if rl.ArchiveStatus {
+		return nil, errors.New("role is already archived"), http.StatusInternalServerError
+	}
+
 	db := getDB()
 
-	filter := bson.D{{"_id", rl.ID}}
+	objId, objErr := getPrimitiveID(rl.ID)
+	if objErr != nil {
+		return nil, objErr, http.StatusInternalServerError
+	}
+
+	filter := bson.D{{"_id", objId}}
 
 	update := bson.M{
 		"$set": bson.M{
@@ -135,35 +157,32 @@ func (rl *Role) ArchiveRole(ctx context.Context) (*Role, error) {
 		},
 	}
 
-	updated, err := db.Collection("roles").UpdateOne(ctx, filter, update)
+	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := db.Collection("roles").FindOneAndUpdate(ctx, filter, update, opt).Decode(&rl)
 	if err != nil {
+		log.Printf("Error : %s", err.Error())
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, errors.New("no document was found")
+			return nil, errors.New("no matching role found to archive"), http.StatusOK
 		}
-		return nil, err
+		return nil, err, http.StatusInternalServerError
 	}
 
-	if updated.ModifiedCount == 0 {
-		return nil, errors.New("could not archive role, try again")
-	} else {
-		single := db.Collection("roles").FindOne(ctx, bson.M{"_id": rl.ID})
-
-		if single.Err() != nil {
-			return nil, single.Err()
-		}
-
-		if err := single.Decode(rl); err != nil {
-			return nil, err
-		}
-	}
-
-	return rl, nil
+	return rl, nil, http.StatusAccepted
 }
 
-func (rl *Role) DeleteRole(ctx context.Context) (*Role, error) {
+func (rl *Role) DeleteRole(ctx context.Context) (*Role, error, int) {
 	db := getDB()
 
-	filter := bson.D{{"_id", rl.ID}}
+	if rl.IsDeletedStatus {
+		return nil, fmt.Errorf("role has been sent to the bin"), http.StatusOK
+	}
+
+	objId, objErr := getPrimitiveID(rl.ID)
+	if objErr != nil {
+		return nil, objErr, http.StatusInternalServerError
+	}
+
+	filter := bson.D{{"_id", objId}}
 	update := bson.M{
 		"$set": bson.M{
 			"updated_at":        time.Now().UTC(),
@@ -172,26 +191,27 @@ func (rl *Role) DeleteRole(ctx context.Context) (*Role, error) {
 		},
 	}
 
-	updated := db.Collection("roles").FindOneAndUpdate(ctx, filter, update)
-	if updated.Err() != nil {
-		if errors.Is(updated.Err(), mongo.ErrNoDocuments) {
-			return nil, errors.New("no document was found")
+	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := db.Collection("roles").FindOneAndUpdate(ctx, filter, update, opt).Decode(&rl)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("no document was found"), http.StatusOK
 		}
-		return nil, updated.Err()
+		return nil, err, http.StatusNotFound
 	}
 
-	if err := updated.Decode(rl); err != nil {
-		return nil, err
-	}
-
-	return rl, nil
-
+	return rl, nil, http.StatusOK
 }
 
 func (rl *Role) HardDeleteRole(ctx context.Context) (*string, error, int) {
 	db := getDB()
 
-	del, err := db.Collection("roles").DeleteOne(ctx, bson.D{{"_id", rl.ID}})
+	objId, objErr := getPrimitiveID(rl.ID)
+	if objErr != nil {
+		return nil, objErr, http.StatusInternalServerError
+	}
+
+	del, err := db.Collection("roles").DeleteOne(ctx, bson.D{{"_id", objId}})
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, err, http.StatusOK
@@ -222,10 +242,12 @@ func FetchRoles(page int, limit int, ctx context.Context) ([]Role, error, int) {
 	}
 
 	opt := options.Find().SetSort(bson.D{{"created_at", -1}}).SetLimit(lmt).SetSkip(skip) //.SetSort(bson.D{{"created_at", 1}})
-	docs, err := db.Collection("roles").Find(ctx, bson.D{}, opt)
-	log.Println("DOCS: ", docs)
+	docs, err := db.Collection("roles").Find(ctx, bson.M{}, opt)
 
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("no role has been created"), http.StatusOK
+		}
 		return nil, err, http.StatusInternalServerError
 	}
 
@@ -235,33 +257,40 @@ func FetchRoles(page int, limit int, ctx context.Context) ([]Role, error, int) {
 		return nil, docs.Err(), http.StatusOK
 	}
 
-	for docs.Next(ctx) {
-		var role Role
-
-		if err := docs.Decode(&role); err == nil {
-			roles = append(roles, role)
-		}
+	if err := docs.All(ctx, &roles); err != nil {
+		return nil, err, http.StatusNotFound
 	}
 
 	return roles, nil, http.StatusOK
 }
 
-func FetchRoleById(id string, ctx context.Context) (*Role, error, int) {
+func FetchRoleById(roleId string, ctx context.Context) (*Role, error, int) {
 	db := getDB()
-	var role Role
-	if err := db.Collection("roles").FindOne(ctx, bson.D{{"_id", id}}).Decode(&role); err != nil {
-		if errors.Is(err, mongo.ErrClientDisconnected) {
-			return nil, err, http.StatusInternalServerError
-		}
 
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, err, http.StatusOK
-		}
-
-		return nil, err, http.StatusBadRequest
+	objID, err := getPrimitiveID(roleId)
+	if err != nil {
+		log.Printf("error: %v", err)
+		return nil, err, http.StatusInternalServerError
 	}
 
-	return &role, nil, http.StatusFound
+	var role Role
+
+	flt := bson.M{"_id": objID}
+	err = db.Collection("roles").FindOne(ctx, flt).Decode(&role)
+
+	log.Println("role: ", role)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("record regarding this role was not found"), http.StatusOK
+		}
+
+		return nil, err, http.StatusNotFound
+	}
+
+	log.Printf("ROLE: %#v", role)
+
+	return &role, nil, http.StatusOK
 }
 
 func FetchRoleByName(roleName string, ctx context.Context) ([]Role, error) {
@@ -269,12 +298,11 @@ func FetchRoleByName(roleName string, ctx context.Context) ([]Role, error) {
 
 	var roles []Role
 
-	doc, err := db.Collection("roles").Find(ctx, bson.D{{"name", roleName}})
+	doc, err := db.Collection("roles").Find(ctx, bson.M{"name": strings.ToLower(roleName)})
 	if err != nil {
 		return nil, err
 	}
 
-	log.Println("DOCUMENTS ", doc)
 	defer doc.Close(ctx)
 
 	if doc.Err() != nil {
@@ -305,11 +333,11 @@ func CreateRole(crl CRole, ctx context.Context) (*CreateRoleResponse, error) {
 
 	db := getDB()
 	doc, err := db.Collection("roles").InsertOne(ctx, bson.D{
-		{"name", crl.Name},
+		{"name", strings.ToLower(crl.Name)},
 		{"description", crl.Description},
 		{"permission", crl.Permission},
 		{"created_by", crl.CreatedBy},
-		{"update_by", crl.UpdatedBy},
+		{"updated_by", crl.UpdatedBy},
 		{"archive_status", false},
 		{"is_deleted_status", false},
 		{"created_at", time.Now().UTC()},
@@ -328,13 +356,3 @@ func CreateRole(crl CRole, ctx context.Context) (*CreateRoleResponse, error) {
 
 	return &response, nil
 }
-
-//update := bson.M{
-//"$set": bson.M{
-//"permission": updatedPermission,
-//"updated_by": updatedBy,
-//},
-//"$currentDate": bson.M{
-//"last_modified": true, // Automatically updates lastModified with the current timestamp
-//},
-//}
