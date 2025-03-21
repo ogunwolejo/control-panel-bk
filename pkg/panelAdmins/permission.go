@@ -17,5 +17,3 @@ func (p *Permission) UpdatePermission(pm Permission) error  {
 	*p = pm
 	return nil
 }
-
-func (p *Permission) ConvertToJson() {}

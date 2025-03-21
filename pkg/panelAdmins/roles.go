@@ -2,14 +2,17 @@ package panelAdmins
 
 import (
 	"context"
-	"control-panel-bk/internal/aws"
+	"control-panel-bk/util"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,12 +21,6 @@ type CreateRoleResponse struct {
 	Status  bool
 	Message string
 	Data    *mongo.InsertOneResult
-}
-
-type Response struct {
-	Status int
-	error  error
-	Data   interface{}
 }
 
 type Role struct {
@@ -47,27 +44,10 @@ type CRole struct {
 	UpdatedBy   string     `json:"updated_by"`
 }
 
-func getDB() *mongo.Database {
-	if aws.MongoFlowCxDBClient == nil {
-		panic("MongoDB database not initialized")
-	}
-	return aws.MongoFlowCxDBClient
-}
+func (rl *Role) GeneralizedUpdate(ctx context.Context, client *mongo.Database) (*Role, error, int) {
+	db := client
 
-func getPrimitiveID(id string) (*bson.ObjectID, error) {
-	objId, err := bson.ObjectIDFromHex(id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &objId, nil
-}
-
-func (rl *Role) GeneralizedUpdate(ctx context.Context) (*Role, error, int) {
-	db := getDB()
-
-	objId, objErr := getPrimitiveID(rl.ID)
+	objId, objErr := util.GetPrimitiveID(rl.ID)
 	if objErr != nil {
 		return nil, objErr, http.StatusInternalServerError
 	}
@@ -100,14 +80,14 @@ func (rl *Role) GeneralizedUpdate(ctx context.Context) (*Role, error, int) {
 	return rl, nil, http.StatusOK
 }
 
-func (rl *Role) UnArchiveRole(ctx context.Context) (*Role, error, int) {
-	db := getDB()
+func (rl *Role) UnArchiveRole(ctx context.Context, client *mongo.Database) (*Role, error, int) {
+	db := client
 
 	if !rl.ArchiveStatus {
 		return nil, fmt.Errorf("role %s is not archived, hence this task cannot be performed", rl.Name), http.StatusBadRequest
 	}
 
-	objId, objErr := getPrimitiveID(rl.ID)
+	objId, objErr := util.GetPrimitiveID(rl.ID)
 	if objErr != nil {
 		return nil, objErr, http.StatusInternalServerError
 	}
@@ -135,14 +115,14 @@ func (rl *Role) UnArchiveRole(ctx context.Context) (*Role, error, int) {
 	return rl, nil, http.StatusOK
 }
 
-func (rl *Role) ArchiveRole(ctx context.Context) (*Role, error, int) {
+func (rl *Role) ArchiveRole(ctx context.Context, client *mongo.Database) (*Role, error, int) {
 	if rl.ArchiveStatus {
 		return nil, errors.New("role is already archived"), http.StatusInternalServerError
 	}
 
-	db := getDB()
+	db := client
 
-	objId, objErr := getPrimitiveID(rl.ID)
+	objId, objErr := util.GetPrimitiveID(rl.ID)
 	if objErr != nil {
 		return nil, objErr, http.StatusInternalServerError
 	}
@@ -170,14 +150,14 @@ func (rl *Role) ArchiveRole(ctx context.Context) (*Role, error, int) {
 	return rl, nil, http.StatusAccepted
 }
 
-func (rl *Role) DeleteRole(ctx context.Context) (*Role, error, int) {
-	db := getDB()
+func (rl *Role) PushRoleToBin(ctx context.Context, client *mongo.Database) (*Role, error, int) {
+	db := client
 
 	if rl.IsDeletedStatus {
 		return nil, fmt.Errorf("role has been sent to the bin"), http.StatusOK
 	}
 
-	objId, objErr := getPrimitiveID(rl.ID)
+	objId, objErr := util.GetPrimitiveID(rl.ID)
 	if objErr != nil {
 		return nil, objErr, http.StatusInternalServerError
 	}
@@ -203,10 +183,43 @@ func (rl *Role) DeleteRole(ctx context.Context) (*Role, error, int) {
 	return rl, nil, http.StatusOK
 }
 
-func (rl *Role) HardDeleteRole(ctx context.Context) (*string, error, int) {
-	db := getDB()
+func (rl *Role) RestoreRoleFromBin(ctx context.Context, client *mongo.Database) (*Role, error, int) {
+	db := client
 
-	objId, objErr := getPrimitiveID(rl.ID)
+	if !rl.IsDeletedStatus {
+		return nil, fmt.Errorf("role is not in the bin catalogue"), http.StatusOK
+	}
+
+	objId, objErr := util.GetPrimitiveID(rl.ID)
+	if objErr != nil {
+		return nil, objErr, http.StatusInternalServerError
+	}
+
+	filter := bson.D{{"_id", objId}}
+	update := bson.M{
+		"$set": bson.M{
+			"updated_at":        time.Now().UTC(),
+			"is_deleted_status": false,
+			"updated_by":        rl.UpdatedBy,
+		},
+	}
+
+	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := db.Collection("roles").FindOneAndUpdate(ctx, filter, update, opt).Decode(&rl)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("no document was found"), http.StatusOK
+		}
+		return nil, err, http.StatusNotFound
+	}
+
+	return rl, nil, http.StatusOK
+}
+
+func (rl *Role) HardDeleteRole(ctx context.Context, client *mongo.Database) (*string, error, int) {
+	db := client
+
+	objId, objErr := util.GetPrimitiveID(rl.ID)
 	if objErr != nil {
 		return nil, objErr, http.StatusInternalServerError
 	}
@@ -227,10 +240,10 @@ func (rl *Role) HardDeleteRole(ctx context.Context) (*string, error, int) {
 	return &rl.ID, nil, http.StatusOK
 }
 
-func FetchRoles(page int, limit int, ctx context.Context) ([]Role, error, int) {
+func FetchRoles(page int, limit int, ctx context.Context, client *mongo.Database) ([]Role, error, int) {
 	var roles []Role
 
-	db := getDB()
+	db := client
 
 	lmt := int64(limit)
 	var skip int64
@@ -264,12 +277,11 @@ func FetchRoles(page int, limit int, ctx context.Context) ([]Role, error, int) {
 	return roles, nil, http.StatusOK
 }
 
-func FetchRoleById(roleId string, ctx context.Context) (*Role, error, int) {
-	db := getDB()
+func FetchRoleById(roleId string, ctx context.Context, client *mongo.Database) (*Role, error, int) {
+	db := client
 
-	objID, err := getPrimitiveID(roleId)
+	objID, err := util.GetPrimitiveID(roleId)
 	if err != nil {
-		log.Printf("error: %v", err)
 		return nil, err, http.StatusInternalServerError
 	}
 
@@ -277,8 +289,6 @@ func FetchRoleById(roleId string, ctx context.Context) (*Role, error, int) {
 
 	flt := bson.M{"_id": objID}
 	err = db.Collection("roles").FindOne(ctx, flt).Decode(&role)
-
-	log.Println("role: ", role)
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -288,13 +298,11 @@ func FetchRoleById(roleId string, ctx context.Context) (*Role, error, int) {
 		return nil, err, http.StatusNotFound
 	}
 
-	log.Printf("ROLE: %#v", role)
-
 	return &role, nil, http.StatusOK
 }
 
-func FetchRoleByName(roleName string, ctx context.Context) ([]Role, error) {
-	db := getDB()
+func FetchRoleByName(roleName string, ctx context.Context, client *mongo.Database) ([]Role, error) {
+	db := client
 
 	var roles []Role
 
@@ -321,8 +329,8 @@ func FetchRoleByName(roleName string, ctx context.Context) ([]Role, error) {
 	return roles, nil
 }
 
-func CreateRole(crl CRole, ctx context.Context) (*CreateRoleResponse, error) {
-	result, err := FetchRoleByName(crl.Name, ctx)
+func CreateRole(crl CRole, ctx context.Context, client *mongo.Database) (*CreateRoleResponse, error) {
+	result, err := FetchRoleByName(crl.Name, ctx, client)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +339,7 @@ func CreateRole(crl CRole, ctx context.Context) (*CreateRoleResponse, error) {
 		return nil, errors.New("a role having the same name already exists")
 	}
 
-	db := getDB()
+	db := client
 	doc, err := db.Collection("roles").InsertOne(ctx, bson.D{
 		{"name", strings.ToLower(crl.Name)},
 		{"description", crl.Description},
@@ -355,4 +363,337 @@ func CreateRole(crl CRole, ctx context.Context) (*CreateRoleResponse, error) {
 	}
 
 	return &response, nil
+}
+
+// Handlers
+
+func HandleCreateRole(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var body CRole
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		output, outputErr := CreateRole(body, r.Context(), db)
+		if outputErr != nil {
+			if errors.Is(outputErr, errors.New("a role having the same name already exists")) {
+				util.ErrorException(w, outputErr, http.StatusOK)
+				return
+			}
+
+			util.ErrorException(w, outputErr, http.StatusInternalServerError)
+			return
+		}
+
+		respBytes, e := util.GetBytesResponse(http.StatusCreated, output)
+		if e != nil {
+			util.ErrorException(w, e, http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(respBytes); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+	}
+}
+
+func HandleFetchRoleByName(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roleName := r.URL.Query().Get("name")
+		roles, err := FetchRoleByName(roleName, r.Context(), db)
+
+		if err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		respBytes, e := util.GetBytesResponse(http.StatusOK, roles)
+		if e != nil {
+			util.ErrorException(w, e, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(respBytes); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+	}
+}
+
+func HandleFetchRoleById(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roleId := chi.URLParam(r, "id")
+		result, err, cde := FetchRoleById(roleId, r.Context(), db)
+
+		if err != nil {
+			util.ErrorException(w, err, cde)
+			return
+		}
+
+		resp, respErr := json.Marshal(&result)
+		if respErr != nil {
+			util.ErrorException(w, respErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(resp); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+		}
+	}
+}
+
+func HandleFetchRoles(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+
+		// Get all the query params i.e PAGE, LIMIT,
+		page := query.Get("page")
+		limit := query.Get("limit")
+
+		var pgQuery, ltQuery int
+
+		pg, pgErr := strconv.Atoi(page)
+		if pgErr != nil {
+			util.ErrorException(w, pgErr, http.StatusInternalServerError)
+			return
+		}
+
+		lt, ltErr := strconv.Atoi(limit)
+		if ltErr != nil {
+			util.ErrorException(w, ltErr, http.StatusInternalServerError)
+			return
+		}
+
+		pgQuery = pg
+		ltQuery = lt
+
+		result, err, code := FetchRoles(pgQuery, ltQuery, r.Context(), db)
+
+		if err != nil {
+			util.ErrorException(w, err, code)
+			return
+		}
+
+		if respBytes, err := util.GetBytesResponse(code, result); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write(respBytes); err != nil {
+				util.ErrorException(w, err, http.StatusInternalServerError)
+			}
+		}
+
+	}
+}
+
+func HandleHardDeleteOfRole(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var role Role
+
+		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		if id, err, code := role.HardDeleteRole(r.Context(), db); err != nil {
+			util.ErrorException(w, err, code)
+			return
+		} else {
+			deleteBytes, delErr := util.GetBytesResponse(code, id)
+			if delErr != nil {
+				util.ErrorException(w, delErr, http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(code)
+			if _, err := w.Write(deleteBytes); err != nil {
+				util.ErrorException(w, err, http.StatusInternalServerError)
+			}
+		}
+	}
+}
+
+func HandleGeneralUpdate(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var body Role
+
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		updateDoc, updateError, code := body.GeneralizedUpdate(r.Context(), db)
+		if updateError != nil {
+			util.ErrorException(w, updateError, code)
+			return
+		}
+
+		respBytes, respErr := util.GetBytesResponse(http.StatusAccepted, updateDoc)
+		if respErr != nil {
+			util.ErrorException(w, respErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		if _, err := w.Write(respBytes); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+		}
+	}
+}
+
+func HandleArchiveRole(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var role Role
+		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		doc, docErr, code := role.ArchiveRole(r.Context(), db)
+		if docErr != nil {
+			if errors.Is(docErr, errors.New("no document was found")) {
+				util.ErrorException(w, docErr, code)
+				return
+			}
+
+			util.ErrorException(w, docErr, code)
+			return
+		}
+
+		archBytes, archErr := json.Marshal(&doc)
+		if archErr != nil {
+			util.ErrorException(w, archErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		if _, err := w.Write(archBytes); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+		}
+
+	}
+}
+
+func HandleUnArchiveRole(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var role Role
+		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		doc, docErr, code := role.UnArchiveRole(r.Context(), db)
+		if docErr != nil {
+			if errors.Is(docErr, errors.New("no document was found")) {
+				util.ErrorException(w, docErr, code)
+				return
+			}
+
+			util.ErrorException(w, docErr, code)
+			return
+		}
+
+		unArchBytes, unArchErr := util.GetBytesResponse(code, doc)
+		if unArchErr != nil {
+			util.ErrorException(w, unArchErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		if _, err := w.Write(unArchBytes); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+		}
+	}
+}
+
+func HandlePushRoleToBin(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var role Role
+		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		bin, binErr, code := role.PushRoleToBin(r.Context(), db)
+		if binErr != nil {
+			if errors.Is(binErr, errors.New("no document was found")) {
+				util.ErrorException(w, binErr, code)
+				return
+			}
+
+			util.ErrorException(w, binErr, code)
+			return
+		}
+
+		binByte, bbErr := util.GetBytesResponse(code, bin)
+		if bbErr != nil {
+			util.ErrorException(w, bbErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		if _, err := w.Write(binByte); err != nil {
+			util.ErrorException(w, bbErr, http.StatusInternalServerError)
+		}
+	}
+}
+
+func HandleRestoreRoleFromBin(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var role Role
+		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		bin, binErr, code := role.RestoreRoleFromBin(r.Context(), db)
+		if binErr != nil {
+			if errors.Is(binErr, errors.New("no document was found")) {
+				util.ErrorException(w, binErr, code)
+				return
+			}
+
+			util.ErrorException(w, binErr, code)
+			return
+		}
+
+		binByte, bbErr := util.GetBytesResponse(code, bin)
+		if bbErr != nil {
+			util.ErrorException(w, bbErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		w.Write(binByte)
+	}
 }

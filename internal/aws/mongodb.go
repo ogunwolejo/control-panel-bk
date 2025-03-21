@@ -6,14 +6,13 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
-	"log"
 	"os"
 	"sync"
 	"time"
 )
 
+var wg sync.WaitGroup
 var MongoDBClient *mongo.Client
-var MongoFlowCxDBClient *mongo.Database
 
 type ColIndex struct {
 	cn      string             // Collection name
@@ -51,19 +50,17 @@ func connect() (*mongo.Client, error) {
 		return nil, err
 	}
 
-	defer func() {
-		if err := client.Disconnect(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	//defer func() {
+	//	if err := client.Disconnect(ctx); err != nil {
+	//		panic(err)
+	//	}
+	//}()
 
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		return nil, err
 	}
 
-	MongoFlowCxDBClient = client.Database("flowCx")
-
-	var wg sync.WaitGroup
+	MongoDBClient = client
 
 	// Creating Indexes for all collections in th db
 	var allPossibleCollectionsIndexes []ColIndex
@@ -82,7 +79,26 @@ func connect() (*mongo.Client, error) {
 				},
 			},
 		},
+		{
+			cn: "teams",
+			indexes: []mongo.IndexModel{
+				{
+					Keys: bson.D{{"name", 1}},
+				},
+				{
+					Keys: bson.D{{"team_member", 1}},
+				},
+				{
+					Keys: bson.D{{"created_at", -1}},
+				},
+				{
+					Keys: bson.D{{"updated_at", -1}},
+				},
+			},
+		},
 	}
+
+	errChan := make(chan error, len(allPossibleCollectionsIndexes))
 
 	// Perform a parallel computation for creating all the possible index for our collection
 	for _, allPossibleCollectionIndexes := range allPossibleCollectionsIndexes {
@@ -95,18 +111,15 @@ func connect() (*mongo.Client, error) {
 
 			defer wg.Done()
 
-			errChan := make(chan error)
-			i.CreateCollectionIndexes(MongoFlowCxDBClient, errChan)
+			i.CreateCollectionIndexes(client.Database("flowCx"), errChan)
+			<-errChan
 
-			if err := <-errChan; err != nil {
-				log.Fatalf("Error in creating indexex for collection: %v", err)
-			}
+			close(errChan)
 
 		}(allPossibleCollectionIndexes)
-
-		wg.Wait()
 	}
 
+	wg.Wait()
 	return client, nil
 }
 
