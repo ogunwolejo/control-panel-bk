@@ -1,3 +1,5 @@
+// Role-based Endpoints
+
 ### Update the text base data
 PATCH {{BASE_URL}}/roles/update
 Content-Type: application/json
@@ -223,3 +225,177 @@ Content-Type: application/json
 ### FETCH ALL ROLES
 GET {{BASE_URL}}/roles/all?page=1&limit=50
 Content-Type: application/json
+
+
+// Teams
+
+### CREATE A NEW TEAM
+POST {{BASE_URL}}/teams/create
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "",
+  "team_lead": "",
+  "team_member": "",
+  "created_by": "",
+  "updated_by": ""
+}
+
+### GET TEAMS
+GET {{BASE_URL}}/teams/all
+Content-Type: application/json
+
+### GET TEAM BY ID
+GET {{BASE_URL}}/teams/team
+Content-Type: application/json
+
+### GET TEAM USING Name
+GET {{BASE_URL}}/teams/id
+Content-Type: application/json
+
+### Archive team
+PATCH {{BASE_URL}}/teams/archive
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "",
+  "team_lead": "",
+  "team_member": "",
+  "created_by": "",
+  "updated_by": "",
+  "created_at": "",
+  "updated_at": "",
+  "archive_status": false,
+  "is_deleted_status": false
+}
+
+### UnArchive team
+PATCH {{BASE_URL}}/teams/unarchive
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "",
+  "team_lead": "",
+  "team_member": "",
+  "created_by": "",
+  "updated_by": "",
+  "created_at": "",
+  "updated_at": "",
+  "archive_status": false,
+  "is_deleted_status": false
+}
+
+### Add Member to a team
+PATCH {{BASE_URL}}/teams/add-members
+Content-Type: application/json
+
+{
+  "team_members": [],
+  "team":{
+    "name": "",
+    "description": "",
+    "team_lead": "",
+    "team_member": "",
+    "created_by": "",
+    "updated_by": "",
+    "created_at": "",
+    "updated_at": "",
+    "archive_status": false,
+    "is_deleted_status": false
+  }
+}
+
+### Remove Members from a team
+PATCH {{BASE_URL}}/teams/remove-members
+Content-Type: application/json
+
+{
+  "new_lead": "",
+  "team":{
+    "name": "",
+    "description": "",
+    "team_lead": "",
+    "team_member": "",
+    "created_by": "",
+    "updated_by": "",
+    "created_at": "",
+    "updated_at": "",
+    "archive_status": false,
+    "is_deleted_status": false
+  }
+}
+
+### Push to bin
+PATCH {{BASE_URL}}/teams/bin
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "",
+  "team_lead": "",
+  "team_member": "",
+  "created_by": "",
+  "updated_by": "",
+  "created_at": "",
+  "updated_at": "",
+  "archive_status": false,
+  "is_deleted_status": false
+}
+
+### Restore from bin
+PATCH {{BASE_URL}}/teams/restore
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "",
+  "team_lead": "",
+  "team_member": "",
+  "created_by": "",
+  "updated_by": "",
+  "created_at": "",
+  "updated_at": "",
+  "archive_status": false,
+  "is_deleted_status": true
+}
+
+### Change team lead
+PATCH {{BASE_URL}}/teams/change-lead
+Content-Type: application/json
+
+{
+  "lead": "",
+  "team": {
+    "name": "",
+    "description": "",
+    "team_lead": "",
+    "team_member": "",
+    "created_by": "",
+    "updated_by": "",
+    "created_at": "",
+    "updated_at": "",
+    "archive_status": false,
+    "is_deleted_status": true
+  }
+}
+
+### Delete team
+DELETE {{BASE_URL}}/teams/delete
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "",
+  "team_lead": "",
+  "team_member": "",
+  "created_by": "",
+  "updated_by": "",
+  "created_at": "",
+  "updated_at": "",
+  "archive_status": false,
+  "is_deleted_status": false
+}
+

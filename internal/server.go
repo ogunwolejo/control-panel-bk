@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+
 func ControlPanelServer() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -25,12 +26,9 @@ func ControlPanelServer() {
 		}
 	}()
 
-	// Load MongoDB
-	go func() {
-		if _, err := aws.ConnectMongoDB(); err != nil {
-			log.Print("Error MongoDB: ", err)
-		}
-	}()
+	if _, err := aws.ConnectMongoDB(); err != nil {
+		log.Print("Error MongoDB: ", err)
+	}
 
 	server := &http.Server{
 		Handler: routes(),

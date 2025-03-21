@@ -1,15 +1,26 @@
 package internal
 
 import (
+	"control-panel-bk/internal/aws"
 	"control-panel-bk/pkg/panelAdmins"
 	"control-panel-bk/pkg/tiers"
 	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"net/http"
 )
+
+func getDB(client *mongo.Client) *mongo.Database {
+	if client == nil {
+		panic("MongoDB database not initialized")
+	}
+	return client.Database("flowCx")
+}
 
 func routes() http.Handler {
 	mux := chi.NewRouter()
 	appMiddleware(mux)
+
+	db := getDB(aws.MongoDBClient)
 
 	// Routes
 	mux.Route("/api", func(r chi.Router) {
@@ -29,22 +40,36 @@ func routes() http.Handler {
 			// The Panel-Admins Sub Routes
 			// Role sub-router
 			r.Route("/roles", func(roleRouter chi.Router) {
-				roleRouter.Post("/", panelAdmins.HandleCreateRole)
-				roleRouter.Get("/all", panelAdmins.HandleFetchRoles)
-				roleRouter.Get("/{id}", panelAdmins.HandleFetchRoleById)
-				roleRouter.Get("/name", panelAdmins.HandleFetchRoleByName) // takes the query params page and limit
+				roleRouter.Post("/", panelAdmins.HandleCreateRole(db))
+				roleRouter.Get("/all", panelAdmins.HandleFetchRoles(db))
+				roleRouter.Get("/{id}", panelAdmins.HandleFetchRoleById(db))
+				roleRouter.Get("/name", panelAdmins.HandleFetchRoleByName(db)) // takes the query params page and limit
 
-				roleRouter.Patch("/update", panelAdmins.HandleGeneralUpdate)
-				roleRouter.Patch("/archive", panelAdmins.HandleArchiveRole)
-				roleRouter.Patch("/unarchive", panelAdmins.HandleUnArchiveRole)
-				roleRouter.Patch("/bin", panelAdmins.HandlePushRoleToBin)
+				roleRouter.Patch("/update", panelAdmins.HandleGeneralUpdate(db))
+				roleRouter.Patch("/archive", panelAdmins.HandleArchiveRole(db))
+				roleRouter.Patch("/unarchive", panelAdmins.HandleUnArchiveRole(db))
+				roleRouter.Patch("/bin", panelAdmins.HandlePushRoleToBin(db))
+				roleRouter.Patch("/restore", panelAdmins.HandleRestoreRoleFromBin(db))
 
-				roleRouter.Delete("/delete", panelAdmins.HandleHardDeleteOfRole)
+				roleRouter.Delete("/delete", panelAdmins.HandleHardDeleteOfRole(db))
 			})
 
 			// Team sub-router
-			r.Route("/team", func(teamRouter chi.Router) {
+			r.Route("/teams", func(teamRouter chi.Router) {
+				teamRouter.Post("/create", panelAdmins.HandleCreateTeam(db))
 
+				teamRouter.Patch("/archive", panelAdmins.HandleArchiveTeam(db))
+				teamRouter.Patch("/unarchive", panelAdmins.HandleUnArchiveTeam(db))
+				teamRouter.Patch("/add-members", panelAdmins.HandleAddNewMembers(db))
+				teamRouter.Patch("/remove-members", panelAdmins.HandleRemoveNewMembers(db))
+				teamRouter.Patch("/change-lead", panelAdmins.HandleChangeTeamLead(db))
+				teamRouter.Patch("/bin", panelAdmins.PushTeamToBin(db))
+				teamRouter.Patch("/restore", panelAdmins.RestoreTeamFromBin(db))
+
+				teamRouter.Delete("/delete", panelAdmins.HardDeleteTeam(db))
+
+				teamRouter.Get("/{id}", panelAdmins.GetTeam(db))
+				teamRouter.Get("/all", panelAdmins.GetTeams)
 			})
 
 			// User sub-router
