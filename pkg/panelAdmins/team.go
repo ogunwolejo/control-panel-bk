@@ -42,14 +42,14 @@ type CTeam struct {
 	UpdatedBy   string   `json:"updated_by"`
 }
 
-type Body struct {
-	teamMembers []string `json:"team_members"`
-	team        Team     `json:"team"`
+type CBody struct {
+	TeamMembers []string `json:"team_members"`
+	Team        Team     `json:"team"`
 }
 
 type CLead struct {
-	team    Team   `json:"team"`
-	newLead string `json:"new_lead"`
+	Team    Team   `json:"team"`
+	NewLead string `json:"new_lead"`
 }
 
 func CreateTeam(nt CTeam, ctx context.Context, client *mongo.Database) (*mongo.InsertOneResult, error, int) {
@@ -73,22 +73,18 @@ func CreateTeam(nt CTeam, ctx context.Context, client *mongo.Database) (*mongo.I
 		return nil, err, http.StatusNotFound
 	}
 
-	return create, nil, http.StatusOK
+	return create, nil, http.StatusCreated
 }
 
-func (t *Team) AddNewTeamMember(member []string, client *mongo.Database, ctx context.Context) (*Team, error, int) {
+func (t *Team) AddNewTeamMember(member []string, teamId *bson.ObjectID, client *mongo.Database, ctx context.Context) (*Team, error, int) {
 	db := client
-	objId, objErr := util.GetPrimitiveID(t.ID)
-	if objErr != nil {
-		return nil, objErr, http.StatusInternalServerError
-	}
 
 	tm := append(t.TeamMember, member...)
 	slices.SortStableFunc(tm, func(a, b string) int {
 		return strings.Compare(a, b)
 	})
 
-	filter := bson.M{"_id": objId}
+	filter := bson.M{"_id": teamId}
 	update := bson.M{
 		"$set": bson.M{
 			"updated_at":  time.Now(),
@@ -108,7 +104,7 @@ func (t *Team) AddNewTeamMember(member []string, client *mongo.Database, ctx con
 	return t, nil, http.StatusAccepted
 }
 
-func (t *Team) RemoveTeamMember(mates []string, client *mongo.Database, ctx context.Context) (*Team, error, int) {
+func (t *Team) RemoveTeamMember(mates []string, teamId bson.ObjectID, client *mongo.Database, ctx context.Context) (*Team, error, int) {
 	db := client
 
 	var wg sync.WaitGroup
@@ -135,12 +131,7 @@ func (t *Team) RemoveTeamMember(mates []string, client *mongo.Database, ctx cont
 		wg.Wait()
 	}
 
-	objId, objErr := util.GetPrimitiveID(t.ID)
-	if objErr != nil {
-		return nil, objErr, http.StatusInternalServerError
-	}
-
-	filter := bson.D{{"_id", objId}}
+	filter := bson.D{{"_id", teamId}}
 	update := bson.M{
 		"$set": bson.M{
 			"updated_by":  t.UpdatedBy,
@@ -159,28 +150,30 @@ func (t *Team) RemoveTeamMember(mates []string, client *mongo.Database, ctx cont
 	return t, nil, http.StatusAccepted
 }
 
-func (t *Team) ChangeTeamLead(mate string, currentLead string, client *mongo.Database, ctx context.Context) (*Team, error, int) {
+func (t *Team) ChangeTeamLead(mate string, currentLead string, teamId *bson.ObjectID, client *mongo.Database, ctx context.Context) (*Team, error, int) {
 	if t.TeamLead != currentLead {
 		return nil, fmt.Errorf("the current lead of id %s is not accurate with the lead id sent", currentLead), http.StatusOK
 	}
 
+	cloneTeam := t
+
 	if !t.IsMember(mate) {
-		nm := make([]string, 1)
+		nm := make([]string, 0)
 		nm = append(nm, mate)
-		tm, err, cde := t.AddNewTeamMember(nm, client, ctx)
+		tm, err, cde := t.AddNewTeamMember(nm, teamId, client, ctx)
 
 		if err != nil {
 			return nil, err, cde // errors.New("unable to add proposed team lead to the team as the user is not a team member")
 		}
 
-		t = tm
+		cloneTeam = tm
 	}
 
 	// Change the Team Member Status
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
 
-	for _, member := range t.TeamMember {
+	for _, member := range cloneTeam.TeamMember {
 		wg.Add(1)
 
 		go func(mt string) {
@@ -252,18 +245,14 @@ func (t *Team) IsMember(mate string) bool {
 	return isFound
 }
 
-func (t *Team) ArchiveTeam(ctx context.Context, client *mongo.Database) (*Team, error, int) {
+func (t *Team) ArchiveTeam(ctx context.Context, teamId *bson.ObjectID, client *mongo.Database) (*Team, error, int) {
 	if t.ArchiveStatus {
 		return nil, errors.New("team has already been archived"), http.StatusOK
 	}
 
 	db := client
-	objId, objErr := util.GetPrimitiveID(t.ID)
-	if objErr != nil {
-		return nil, objErr, http.StatusInternalServerError
-	}
 
-	flt := bson.M{"_id": objId}
+	flt := bson.M{"_id": teamId}
 	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	update := bson.D{{
 		"$set", bson.M{
@@ -283,18 +272,14 @@ func (t *Team) ArchiveTeam(ctx context.Context, client *mongo.Database) (*Team, 
 	return t, nil, http.StatusOK
 }
 
-func (t *Team) UnArchiveTeam(ctx context.Context, client *mongo.Database) (*Team, error, int) {
+func (t *Team) UnArchiveTeam(ctx context.Context, teamId *bson.ObjectID, client *mongo.Database) (*Team, error, int) {
 	if !t.ArchiveStatus {
 		return nil, errors.New("team is not in the archive catalogue"), http.StatusOK
 	}
 
 	db := client
-	objId, objErr := util.GetPrimitiveID(t.ID)
-	if objErr != nil {
-		return nil, objErr, http.StatusInternalServerError
-	}
 
-	flt := bson.M{"_id": objId}
+	flt := bson.M{"_id": teamId}
 	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	update := bson.D{{
 		"$set", bson.M{
@@ -339,7 +324,7 @@ func HandleCreateTeam(db *mongo.Database) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(code)
 		if _, err := w.Write(respBytes); err != nil {
 			util.ErrorException(w, err, http.StatusInternalServerError)
 		}
@@ -362,13 +347,7 @@ func GetTeams(db *mongo.Database) http.HandlerFunc {
 			return
 		}
 
-		var body CTeam
 		var teams []Team
-
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			util.ErrorException(w, err, http.StatusInternalServerError)
-			return
-		}
 
 		// Calculating amount of docs to skip
 		var skip int64 = 0
@@ -376,7 +355,7 @@ func GetTeams(db *mongo.Database) http.HandlerFunc {
 			skip = int64((page - 1) * limit)
 		}
 
-		opt := options.Find().SetLimit(int64(limit)).SetSkip(skip).SetSort(bson.M{"created_by": -1})
+		opt := options.Find().SetSkip(skip).SetLimit(int64(limit)).SetSort(bson.M{"created_by": -1})
 		result, err := db.Collection("teams").Find(r.Context(), bson.M{}, opt)
 
 		if err != nil {
@@ -395,9 +374,8 @@ func GetTeams(db *mongo.Database) http.HandlerFunc {
 		}
 
 		// The response nature
-
 		respBytes, respBytesErr := util.GetBytesResponse(http.StatusOK, teams)
-		if respBytes != nil {
+		if respBytesErr != nil {
 			util.ErrorException(w, respBytesErr, http.StatusInternalServerError)
 			return
 		}
@@ -457,7 +435,7 @@ func GetTeam(client *mongo.Database) http.HandlerFunc {
 		// When the id does not match the OBJECT ID type
 		if !doesMatch {
 			fil := bson.M{
-				"$name": bson.M{
+				"$text": bson.M{
 					"$search": id,
 				},
 			}
@@ -502,7 +480,13 @@ func HandleArchiveTeam(db *mongo.Database) http.HandlerFunc {
 			return
 		}
 
-		result, err, code := body.ArchiveTeam(r.Context(), db)
+		objId, objErr := util.GetPrimitiveID(body.ID)
+		if objErr != nil {
+			util.ErrorException(w, objErr, http.StatusInternalServerError)
+			return
+		}
+
+		result, err, code := body.ArchiveTeam(r.Context(), objId, db)
 		if err != nil {
 			util.ErrorException(w, err, code)
 			return
@@ -515,7 +499,7 @@ func HandleArchiveTeam(db *mongo.Database) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(code)
 		w.Write(respByt)
 	}
 }
@@ -530,7 +514,13 @@ func HandleUnArchiveTeam(db *mongo.Database) http.HandlerFunc {
 			return
 		}
 
-		result, err, code := body.UnArchiveTeam(r.Context(), db)
+		objId, objErr := util.GetPrimitiveID(body.ID)
+		if objErr != nil {
+			util.ErrorException(w, objErr, http.StatusInternalServerError)
+			return
+		}
+
+		result, err, code := body.UnArchiveTeam(r.Context(), objId, db)
 		if err != nil {
 			util.ErrorException(w, err, code)
 			return
@@ -552,13 +542,19 @@ func HandleAddNewMembers(db *mongo.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
-		var body Body
+		var body CBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			util.ErrorException(w, err, http.StatusInternalServerError)
 			return
 		}
 
-		result, e, code := body.team.AddNewTeamMember(body.teamMembers, db, r.Context())
+		objId, objErr := util.GetPrimitiveID(body.Team.ID)
+		if objErr != nil {
+			util.ErrorException(w, objErr, http.StatusInternalServerError)
+			return
+		}
+
+		result, e, code := body.Team.AddNewTeamMember(body.TeamMembers, objId, db, r.Context())
 		if e != nil {
 			util.ErrorException(w, e, code)
 			return
@@ -580,13 +576,19 @@ func HandleRemoveNewMembers(db *mongo.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
-		var body Body
+		var body CBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			util.ErrorException(w, err, http.StatusInternalServerError)
 			return
 		}
 
-		result, e, code := body.team.RemoveTeamMember(body.teamMembers, db, r.Context())
+		objId, objErr := util.GetPrimitiveID(body.Team.ID)
+		if objErr != nil {
+			util.ErrorException(w, objErr, http.StatusInternalServerError)
+			return
+		}
+
+		result, e, code := body.Team.RemoveTeamMember(body.TeamMembers, *objId, db, r.Context())
 		if e != nil {
 			util.ErrorException(w, e, code)
 			return
@@ -652,7 +654,13 @@ func HandleChangeTeamLead(db *mongo.Database) http.HandlerFunc {
 			return
 		}
 
-		result, e, code := body.team.ChangeTeamLead(body.newLead, body.team.TeamLead, db, r.Context())
+		objId, objErr := util.GetPrimitiveID(body.Team.ID)
+		if objErr != nil {
+			util.ErrorException(w, objErr, http.StatusInternalServerError)
+			return
+		}
+
+		result, e, code := body.Team.ChangeTeamLead(body.NewLead, body.Team.TeamLead, objId, db, r.Context())
 		if e != nil {
 			util.ErrorException(w, e, code)
 			return

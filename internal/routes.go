@@ -69,13 +69,11 @@ func routes() http.Handler {
 				teamRouter.Delete("/delete", panelAdmins.HardDeleteTeam(db))
 
 				teamRouter.Get("/{id}", panelAdmins.GetTeam(db))
-				teamRouter.Get("/all", panelAdmins.GetTeams)
+				teamRouter.Get("/all", panelAdmins.GetTeams(db))
 			})
 
 			// User sub-router
-			r.Route("/user", func(userRouter chi.Router) {
-
-			})
+			r.Route("/user", func(userRouter chi.Router) {})
 
 		})
 	})
