@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"github.com/stretchr/testify/suite"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,6 +9,23 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )
+
+type TeamRoutesTestSuite struct {
+	suite.Suite
+	router *chi.Mux
+}
+
+func mockHandler(status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+		w.Write([]byte(body))
+	}
+}
+
+// Run the test suite
+func TestTeamRoutesSuite(t *testing.T) {
+	suite.Run(t, new(TeamRoutesTestSuite))
+}
 
 func TestRoutes(t *testing.T) {
 	// Create a new chi router
@@ -107,6 +125,70 @@ func TestRoutes(t *testing.T) {
 
 			assert.Equal(t, tc.wantStatus, rec.Code)
 			assert.Contains(t, rec.Body.String(), tc.wantBody)
+		})
+	}
+}
+
+func (suite *TeamRoutesTestSuite) SetupSuite() {
+	suite.router = chi.NewRouter()
+
+	// Define mock team routes
+	suite.router.Route("/teams", func(teamRouter chi.Router) {
+		teamRouter.Post("/create", mockHandler(http.StatusCreated, "Team created"))
+
+		teamRouter.Patch("/archive", mockHandler(http.StatusOK, "Team archived"))
+		teamRouter.Patch("/unarchive", mockHandler(http.StatusOK, "Team unarchived"))
+		teamRouter.Patch("/add-members", mockHandler(http.StatusOK, "Members added"))
+		teamRouter.Patch("/remove-members", mockHandler(http.StatusOK, "Members removed"))
+		teamRouter.Patch("/change-lead", mockHandler(http.StatusOK, "Team lead changed"))
+		teamRouter.Patch("/bin", mockHandler(http.StatusOK, "Team moved to bin"))
+		teamRouter.Patch("/restore", mockHandler(http.StatusOK, "Team restored"))
+
+		teamRouter.Delete("/delete", mockHandler(http.StatusOK, "Team deleted"))
+
+		teamRouter.Get("/{id}", mockHandler(http.StatusOK, "Team details"))
+		teamRouter.Get("/all", mockHandler(http.StatusOK, "All teams"))
+	})
+}
+
+// Test cases
+func (suite *TeamRoutesTestSuite) TestTeamRoutes() {
+	testCases := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus int
+		wantBody   string
+	}{
+		// Create team
+		{"POST /teams/create", http.MethodPost, "/teams/create", http.StatusCreated, "Team created"},
+
+		// Modify team
+		{"PATCH /teams/archive", http.MethodPatch, "/teams/archive", http.StatusOK, "Team archived"},
+		{"PATCH /teams/unarchive", http.MethodPatch, "/teams/unarchive", http.StatusOK, "Team unarchived"},
+		{"PATCH /teams/add-members", http.MethodPatch, "/teams/add-members", http.StatusOK, "Members added"},
+		{"PATCH /teams/remove-members", http.MethodPatch, "/teams/remove-members", http.StatusOK, "Members removed"},
+		{"PATCH /teams/change-lead", http.MethodPatch, "/teams/change-lead", http.StatusOK, "Team lead changed"},
+		{"PATCH /teams/bin", http.MethodPatch, "/teams/bin", http.StatusOK, "Team moved to bin"},
+		{"PATCH /teams/restore", http.MethodPatch, "/teams/restore", http.StatusOK, "Team restored"},
+
+		// Delete team
+		{"DELETE /teams/delete", http.MethodDelete, "/teams/delete", http.StatusOK, "Team deleted"},
+
+		// Get team details
+		{"GET /teams/{id}", http.MethodGet, "/teams/123", http.StatusOK, "Team details"},
+		{"GET /teams/all", http.MethodGet, "/teams/all", http.StatusOK, "All teams"},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			rec := httptest.NewRecorder()
+
+			suite.router.ServeHTTP(rec, req)
+
+			assert.Equal(suite.T(), tc.wantStatus, rec.Code)
+			assert.Contains(suite.T(), rec.Body.String(), tc.wantBody)
 		})
 	}
 }

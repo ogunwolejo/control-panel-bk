@@ -86,7 +86,7 @@ func connect() (*mongo.Client, error) {
 					Keys: bson.D{{"name", 1}},
 				},
 				{
-					Keys: bson.D{{"team_member", 1}},
+					Keys: bson.D{{"name", "text"}, {"description", "text"}},
 				},
 				{
 					Keys: bson.D{{"created_at", -1}},
