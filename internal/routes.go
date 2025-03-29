@@ -73,7 +73,9 @@ func routes() http.Handler {
 			})
 
 			// User sub-router
-			r.Route("/user", func(userRouter chi.Router) {})
+			r.Route("/users", func(userRouter chi.Router) {
+				userRouter.Post("/create", panelAdmins.CreateUser(aws.MongoDBClient))
+			})
 
 		})
 	})

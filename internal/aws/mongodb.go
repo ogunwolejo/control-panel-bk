@@ -50,12 +50,6 @@ func connect() (*mongo.Client, error) {
 		return nil, err
 	}
 
-	//defer func() {
-	//	if err := client.Disconnect(ctx); err != nil {
-	//		panic(err)
-	//	}
-	//}()
-
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		return nil, err
 	}
@@ -93,6 +87,15 @@ func connect() (*mongo.Client, error) {
 				},
 				{
 					Keys: bson.D{{"updated_at", -1}},
+				},
+			},
+		},
+		{
+			cn: "users",
+			indexes: []mongo.IndexModel{
+				{
+					Keys: bson.D{{"email", 1}},
+					Options: options.Index().SetUnique(true),
 				},
 			},
 		},

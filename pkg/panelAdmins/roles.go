@@ -457,28 +457,32 @@ func HandleFetchRoles(db *mongo.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 
-		// Get all the query params i.e PAGE, LIMIT,
-		page := query.Get("page")
-		limit := query.Get("limit")
+		var limit int
+		var page int
 
-		var pgQuery, ltQuery int
-
-		pg, pgErr := strconv.Atoi(page)
-		if pgErr != nil {
-			util.ErrorException(w, pgErr, http.StatusInternalServerError)
-			return
+		if len(query.Get("page")) > 0 {
+			pg, pgErr := strconv.Atoi(query.Get("page"))
+			if pgErr != nil {
+				util.ErrorException(w, pgErr, http.StatusInternalServerError)
+				return
+			}
+			page = pg
+		} else {
+			page = 1
 		}
 
-		lt, ltErr := strconv.Atoi(limit)
-		if ltErr != nil {
-			util.ErrorException(w, ltErr, http.StatusInternalServerError)
-			return
+		if len(query.Get("limit")) > 0 {
+			lmt, lmtErr := strconv.Atoi(query.Get("limit"))
+			if lmtErr != nil {
+				util.ErrorException(w, lmtErr, http.StatusInternalServerError)
+				return
+			}
+			limit = lmt
+		} else {
+			limit = MAX_LIMIT
 		}
 
-		pgQuery = pg
-		ltQuery = lt
-
-		result, err, code := FetchRoles(pgQuery, ltQuery, r.Context(), db)
+		result, err, code := FetchRoles(page, limit, r.Context(), db)
 
 		if err != nil {
 			util.ErrorException(w, err, code)
