@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"log"
 	"os"
 )
 
@@ -15,6 +16,10 @@ import (
 type Group struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+}
+
+type PoolUser struct {
+	Username string `json:"username"`
 }
 
 func getClient(cfg *aws.Config) *cognitoidentityprovider.Client {
@@ -63,15 +68,64 @@ func CreateNewUser(cfg *aws.Config, username string, roleId string, tp util.Pass
 		UserPoolId: aws.String(os.Getenv("AWS_USER_POOL_ID")),
 		DesiredDeliveryMediums: []types.DeliveryMediumType{
 			types.DeliveryMediumTypeEmail,
-			types.DeliveryMediumTypeSms,
 		},
 		UserAttributes: []types.AttributeType{
+			{Name: aws.String("email"), Value: aws.String(username)},
 			{Name: aws.String("custom:role"), Value: aws.String(roleId)},
 		},
 		TemporaryPassword: aws.String(tp.GetPassword()),
 	}
 
 	output, err := client.AdminCreateUser(context.TODO(), &input)
+	if err != nil {
+		log.Println("error: ", err)
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func DeleteUser(cfg *aws.Config, username string) (*cognitoidentityprovider.AdminDeleteUserOutput, error) {
+	client := getClient(cfg)
+
+	input := cognitoidentityprovider.AdminDeleteUserInput{
+		Username:   aws.String(username),
+		UserPoolId: aws.String(os.Getenv("AWS_USER_POOL_ID")),
+	}
+
+	out, err := client.AdminDeleteUser(context.TODO(), &input)
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
+func DisableUser(cfg *aws.Config, username string) (*cognitoidentityprovider.AdminDisableUserOutput, error) {
+	client := getClient(cfg)
+
+	input := cognitoidentityprovider.AdminDisableUserInput{
+		Username:   aws.String(username),
+		UserPoolId: aws.String(os.Getenv("AWS_USER_POOL_ID")),
+	}
+
+	output, err := client.AdminDisableUser(context.TODO(), &input)
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func ActivateUser(cfg *aws.Config, username string) (*cognitoidentityprovider.AdminEnableUserOutput, error) {
+	client := getClient(cfg)
+
+	input := cognitoidentityprovider.AdminEnableUserInput{
+		Username:   aws.String(username),
+		UserPoolId: aws.String(os.Getenv("AWS_USER_POOL_ID")),
+	}
+
+	output, err := client.AdminEnableUser(context.TODO(), &input)
 	if err != nil {
 		return nil, err
 	}

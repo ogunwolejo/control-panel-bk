@@ -333,29 +333,44 @@ func HandleCreateTeam(db *mongo.Database) http.HandlerFunc {
 
 func GetTeams(db *mongo.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		params := r.URL.Query()
-		page, pgErr := strconv.Atoi(params.Get("page"))
-		limit, lmtErr := strconv.Atoi(params.Get("limit"))
+		query := r.URL.Query()
 
-		if pgErr != nil {
-			util.ErrorException(w, pgErr, http.StatusInternalServerError)
-			return
-		}
+		var limit int64
+		var skip int64
 
-		if lmtErr != nil {
-			util.ErrorException(w, lmtErr, http.StatusInternalServerError)
-			return
-		}
+		var page int
 
 		var teams []Team
 
-		// Calculating amount of docs to skip
-		var skip int64 = 0
-		if page > 1 {
-			skip = int64((page - 1) * limit)
+		if len(query.Get("page")) > 0 {
+			pg, pgErr := strconv.Atoi(query.Get("page"))
+			if pgErr != nil {
+				util.ErrorException(w, pgErr, http.StatusInternalServerError)
+				return
+			}
+			page = pg
+		} else {
+			page = 1
 		}
 
-		opt := options.Find().SetSkip(skip).SetLimit(int64(limit)).SetSort(bson.M{"created_by": -1})
+		if len(query.Get("limit")) > 0 {
+			lmt, lmtErr := strconv.Atoi(query.Get("limit"))
+			if lmtErr != nil {
+				util.ErrorException(w, lmtErr, http.StatusInternalServerError)
+				return
+			}
+			limit = int64(lmt)
+		} else {
+			limit = int64(MAX_LIMIT)
+		}
+
+		if page > 1 {
+			skip = int64(page - 1)
+		} else {
+			skip = int64(0)
+		}
+
+		opt := options.Find().SetLimit(limit).SetSkip(skip).SetSort(bson.M{"created_by": -1})
 		result, err := db.Collection("teams").Find(r.Context(), bson.M{}, opt)
 
 		if err != nil {

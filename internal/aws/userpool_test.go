@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"control-panel-bk/util"
 	"errors"
 	"os"
 	"testing"
@@ -15,6 +16,9 @@ type mockCognitoClient struct {
 	CreateGroupFunc         func(ctx context.Context, input *cognitoidentityprovider.CreateGroupInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.CreateGroupOutput, error)
 	AdminAddUserToGroupFunc func(ctx context.Context, input *cognitoidentityprovider.AdminAddUserToGroupInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminAddUserToGroupOutput, error)
 	AdminCreateUserFunc     func(ctx context.Context, input *cognitoidentityprovider.AdminCreateUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminCreateUserOutput, error)
+	AdminDeleteUserFunc     func(ctx context.Context, input *cognitoidentityprovider.AdminDeleteUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminDeleteUserOutput, error)
+	AdminDisableUserFunc    func(ctx context.Context, input *cognitoidentityprovider.AdminDisableUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminDisableUserOutput, error)
+	AdminEnableUserFunc     func(ctx context.Context, input *cognitoidentityprovider.AdminEnableUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminEnableUserOutput, error)
 }
 
 func (m *mockCognitoClient) CreateGroup(ctx context.Context, input *cognitoidentityprovider.CreateGroupInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.CreateGroupOutput, error) {
@@ -27,6 +31,18 @@ func (m *mockCognitoClient) AdminAddUserToGroup(ctx context.Context, input *cogn
 
 func (m *mockCognitoClient) AdminCreateUser(ctx context.Context, input *cognitoidentityprovider.AdminCreateUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminCreateUserOutput, error) {
 	return m.AdminCreateUserFunc(ctx, input, opts...)
+}
+
+func (m *mockCognitoClient) AdminDeleteUser(ctx context.Context, input *cognitoidentityprovider.AdminDeleteUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminDeleteUserOutput, error) {
+	return m.AdminDeleteUserFunc(ctx, input, opts...)
+}
+
+func (m *mockCognitoClient) AdminDisableUser(ctx context.Context, input *cognitoidentityprovider.AdminDisableUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminDisableUserOutput, error) {
+	return m.AdminDisableUserFunc(ctx, input, opts...)
+}
+
+func (m *mockCognitoClient) AdminEnableUser(ctx context.Context, input *cognitoidentityprovider.AdminEnableUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminEnableUserOutput, error) {
+	return m.AdminEnableUserFunc(ctx, input, opts...)
 }
 
 var mockClient mockCognitoClient
@@ -80,7 +96,70 @@ func TestCreateNewUser(t *testing.T) {
 
 	cfg := aws.Config{}
 	os.Setenv("AWS_USER_POOL_ID", "test-user-pool-id")
-	output, err := CreateNewUser(&cfg, "testuser")
+
+	tp := util.Password{
+		10,
+		1,
+		1,
+		true,
+		false,
+	}
+
+	output, err := CreateNewUser(&cfg, "testuser", "1234555", tp)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+}
+
+func TestDeleteUser(t *testing.T) {
+	mockClient = mockCognitoClient{
+		AdminDeleteUserFunc: func(ctx context.Context, input *cognitoidentityprovider.AdminDeleteUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminDeleteUserOutput, error) {
+			if input.Username == nil || *input.Username == "" {
+				return nil, errors.New("username is required")
+			}
+			return &cognitoidentityprovider.AdminDeleteUserOutput{}, nil
+		},
+	}
+
+	cfg := aws.Config{}
+	os.Setenv("AWS_USER_POOL_ID", "test-user-pool-id")
+	output, err := DeleteUser(&cfg, "testuser")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+}
+
+func TestDisableUser(t *testing.T) {
+	mockClient = mockCognitoClient{
+		AdminDisableUserFunc: func(ctx context.Context, input *cognitoidentityprovider.AdminDisableUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminDisableUserOutput, error) {
+			if input.Username == nil || *input.Username == "" {
+				return nil, errors.New("username is required")
+			}
+			return &cognitoidentityprovider.AdminDisableUserOutput{}, nil
+		},
+	}
+
+	cfg := aws.Config{}
+	os.Setenv("AWS_USER_POOL_ID", "test-user-pool-id")
+	output, err := DisableUser(&cfg, "testuser")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+}
+
+func TestActivateUser(t *testing.T) {
+	mockClient = mockCognitoClient{
+		AdminEnableUserFunc: func(ctx context.Context, input *cognitoidentityprovider.AdminEnableUserInput, opts ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminEnableUserOutput, error) {
+			if input.Username == nil || *input.Username == "" {
+				return nil, errors.New("username is required")
+			}
+			return &cognitoidentityprovider.AdminEnableUserOutput{}, nil
+		},
+	}
+
+	cfg := aws.Config{}
+	os.Setenv("AWS_USER_POOL_ID", "test-user-pool-id")
+	output, err := ActivateUser(&cfg, "testuser")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, output)

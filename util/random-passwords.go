@@ -22,3 +22,11 @@ type Password struct {
 func (p Password) GetPassword() string {
 	return password.MustGenerate(p.Length, p.NumDigits, p.NumSymbols, p.NoUpper, p.AllowRepeat)
 }
+
+var DefaultPassword = Password{
+	AllowRepeat: false,
+	NoUpper: false,
+	NumSymbols: 1,
+	NumDigits: 1,
+	Length: 10,
+}

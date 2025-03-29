@@ -1,0 +1,57 @@
+POST {{BASE_URL}}/users/create
+Content-Type: application/json
+
+
+# Note: if the role_id has a value, then the role will be empty and vice-verse
+#"role": {
+#"name": "",
+#"description": "",
+#"permission": {},
+#"created_by": "jos",
+#"updated_by": "jos"
+#},
+# the team_id can also be omitted
+# Dob, Profile can be omitted
+# role.description can be omitted
+
+{
+  "first_name": "Joshua",
+  "last_name": "Ogunwole",
+  "gender": "male",
+  "email": "ogunwole888@gmail.com",
+  "phone": "+2349031846448",
+  "role_id": "67db3402d08dedc2e44081bb",
+  "is_team_lead":false,
+  "created_by": "jos",
+  "updated_by": "jos"
+}
+
+
+###
+POST {{BASE_URL}}/users/create
+Content-Type: application/json
+
+
+{
+  "first_name": "Joshua",
+  "last_name": "Ogunwole",
+  "gender": "male",
+  "email": "ogunwole888@gmail.com",
+  "phone": "+2349031846448",
+  "role": {
+    "name": "administrator 1",
+    "description": "second to the ceo",
+    "permission": {
+      "onboarding":{"write": true, "read": true},
+      "role": {"write": true, "read": true},
+      "tenant": {"write": true, "read": true},
+      "team": {"write": true, "read": true},
+      "billing": {"write": false, "read": true}
+    },
+    "created_by": "jos",
+    "updated_by": "jos"
+  },
+  "is_team_lead":false,
+  "created_by": "jos",
+  "updated_by": "jos"
+}
