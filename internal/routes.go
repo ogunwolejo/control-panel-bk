@@ -6,7 +6,6 @@ import (
 	"control-panel-bk/pkg/tiers"
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"net/http"
 )
 
 func getDB(client *mongo.Client) *mongo.Database {
@@ -16,7 +15,7 @@ func getDB(client *mongo.Client) *mongo.Database {
 	return client.Database("flowCx")
 }
 
-func routes() http.Handler {
+func Routes() *chi.Mux {
 	mux := chi.NewRouter()
 	appMiddleware(mux)
 

@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-
 func ControlPanelServer() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -30,8 +29,10 @@ func ControlPanelServer() {
 		log.Print("Error MongoDB: ", err)
 	}
 
+	go RedisConnection()
+
 	server := &http.Server{
-		Handler: routes(),
+		Handler: Routes(),
 		Addr:    fmt.Sprintf(":%s", os.Getenv("PORT")),
 	}
 

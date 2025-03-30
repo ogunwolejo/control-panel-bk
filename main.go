@@ -1,3 +1,4 @@
+// main_local.go (optional)
 package main
 
 import (

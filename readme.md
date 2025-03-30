@@ -148,3 +148,22 @@ $ go run cmd/main.go
 ```bash
     java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
 ```
+
+
+### Local test
+
+### Running lambda locally
+```bash
+    # Build Go binary for Lambda
+    GOOS=linux GOARCH=amd64 go build -o main main.go # using git bash
+
+    # Start AWS SAM local API Gateway
+    sam local start-api
+    sam local start-api --debug
+    sam logs -n GoLambdaFunction --tail
+
+    
+    #
+    http://127.0.0.1:3000/your-endpoint
+
+```

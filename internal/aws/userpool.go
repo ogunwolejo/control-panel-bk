@@ -82,6 +82,15 @@ func CreateNewUser(cfg *aws.Config, username string, roleId string, tp util.Pass
 		return nil, err
 	}
 
+	var userSub string
+	for _, attr := range output.User.Attributes {
+		if *attr.Name == "sub" {
+			userSub = *attr.Value
+			break
+		}
+	}
+
+	log.Println("The newly created user USER_POOL_ID", userSub)
 	return output, nil
 }
 
@@ -131,4 +140,55 @@ func ActivateUser(cfg *aws.Config, username string) (*cognitoidentityprovider.Ad
 	}
 
 	return output, nil
+}
+
+func GetRefreshToken(cfg *aws.Config, clientId, refreshToken string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
+	client := getClient(cfg)
+
+	input := cognitoidentityprovider.InitiateAuthInput{
+		ClientId: aws.String(clientId),
+		AuthFlow: types.AuthFlowTypeRefreshTokenAuth,
+		AuthParameters: map[string]string{
+			"REFRESH_TOKEN": refreshToken,
+		},
+	}
+
+	output, err := client.InitiateAuth(context.TODO(), &input)
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func LogInUser(cfg *aws.Config, clientId, email, password string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
+	client := getClient(cfg)
+
+	input := cognitoidentityprovider.InitiateAuthInput{
+		AuthFlow: types.AuthFlowTypeUserPasswordAuth,
+		ClientId: aws.String(clientId),
+		AuthParameters: map[string]string{
+			"USERNAME": email,
+			"PASSWORD": password,
+		},
+	}
+
+	output, err := client.InitiateAuth(context.TODO(), &input)
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func LogOutUser(cfg *aws.Config, token string) error {
+	client := getClient(cfg)
+
+	if _, err := client.GlobalSignOut(context.TODO(), &cognitoidentityprovider.GlobalSignOutInput{
+		AccessToken: aws.String(token),
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
