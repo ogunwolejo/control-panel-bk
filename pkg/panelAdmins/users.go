@@ -106,20 +106,18 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 				return fmt.Errorf("failed to create a user in the userpool")
 			}
 
-			log.Printf("AWS USER-POOL: %+v", output)
-
 			// STEP 3: CREATE THE USER IN A MONGO "users" COLLECTION WITH THE USER ID FROM THE USER POOL IN THE STUB
 			doc, docErr := col.InsertOne(r.Context(), bson.M{
-				"first_name": newUser.FirstName,
-				"last_name":  newUser.LastName,
-				"email":      newUser.Email,
-				"phone_num":  newUser.Phone,
-				"gender":     newUser.Gender,
-				"dob":        newUser.Dob,
-				"created_at": time.Now(),
-				"updated_at": time.Now(),
-				"role_id":    newUser.RoleId,
-				///"stub": output.User.,
+				"first_name":        newUser.FirstName,
+				"last_name":         newUser.LastName,
+				"email":             newUser.Email,
+				"phone_num":         newUser.Phone,
+				"gender":            newUser.Gender,
+				"dob":               newUser.Dob,
+				"created_at":        time.Now(),
+				"updated_at":        time.Now(),
+				"role_id":           newUser.RoleId,
+				"up_id":             output,
 				"is_active":         false, // Will be set to true when user changes passwords
 				"archive_status":    false,
 				"is_deleted_status": false,
@@ -127,12 +125,12 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 				"updated_by":        newUser.UpdatedBy,
 			})
 
-			userId := doc.InsertedID.(bson.ObjectID).Hex() //doc.InsertedID.(string)
-			log.Println("USER ID: ", userId)
-
 			if docErr != nil {
 				return fmt.Errorf("failed to insert the user document in the users collection %w", docErr)
 			}
+
+			userId := doc.InsertedID.(bson.ObjectID).Hex() //doc.InsertedID.(string)
+			log.Println("USER ID: ", userId)
 
 			// STEP 4: ADD THE USER ID FROM THE "teams" COLLECTION into the team he was added to if such was provided
 			var team Team

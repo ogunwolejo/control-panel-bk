@@ -16,7 +16,7 @@ func appMiddleware(m *chi.Mux) {
 		AllowedHeaders:   []string{"User-Agent", "Content-Type", "Accept", "Accept-Encoding", "Accept-Language", "Cache-Control", "Connection", "X-CSRF-Token", "Host", "Origin", "Authorization", "Referer"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
-		MaxAge:           300,
+		MaxAge:           60 * 24 * 60 * 60,
 	}))
 	m.Use(middleware.NoCache) // No caching
 	m.Use(middleware.AllowContentEncoding("application/json", "text/xml"))

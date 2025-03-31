@@ -39,8 +39,8 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer conn.Close()
 
-	_ := r.URL.Query().Get("role")
-	userID := ""
+	c := r.URL.Query().Get("role")
+	userID := c
 
 	// Store in local memory for debugging
 	connections[userID] = conn

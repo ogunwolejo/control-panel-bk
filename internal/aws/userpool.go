@@ -60,7 +60,7 @@ func AddUsersToUserPoolGroup(cfg *aws.Config, groupName string, username string)
 	return output, nil
 }
 
-func CreateNewUser(cfg *aws.Config, username string, roleId string, tp util.Password) (*cognitoidentityprovider.AdminCreateUserOutput, error) {
+func CreateNewUser(cfg *aws.Config, username string, roleId string, tp util.Password) (*string, error) {
 	client := getClient(cfg)
 
 	input := cognitoidentityprovider.AdminCreateUserInput{
@@ -90,8 +90,7 @@ func CreateNewUser(cfg *aws.Config, username string, roleId string, tp util.Pass
 		}
 	}
 
-	log.Println("The newly created user USER_POOL_ID", userSub)
-	return output, nil
+	return &userSub, nil
 }
 
 func DeleteUser(cfg *aws.Config, username string) (*cognitoidentityprovider.AdminDeleteUserOutput, error) {
@@ -142,7 +141,7 @@ func ActivateUser(cfg *aws.Config, username string) (*cognitoidentityprovider.Ad
 	return output, nil
 }
 
-func GetRefreshToken(cfg *aws.Config, clientId, refreshToken string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
+func AuthViaRefreshToken(cfg *aws.Config, clientId, refreshToken string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
 	client := getClient(cfg)
 
 	input := cognitoidentityprovider.InitiateAuthInput{
@@ -154,6 +153,21 @@ func GetRefreshToken(cfg *aws.Config, clientId, refreshToken string) (*cognitoid
 	}
 
 	output, err := client.InitiateAuth(context.TODO(), &input)
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func AuthViaAccessToken(cfg *aws.Config, accessToken string) (*cognitoidentityprovider.GetUserOutput, error) {
+	client := cognitoidentityprovider.NewFromConfig(*cfg)
+
+	input := &cognitoidentityprovider.GetUserInput{
+		AccessToken: aws.String(accessToken),
+	}
+
+	output, err := client.GetUser(context.TODO(), input)
 	if err != nil {
 		return nil, err
 	}
