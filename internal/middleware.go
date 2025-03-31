@@ -1,10 +1,14 @@
 package internal
 
 import (
+	"context"
+	"control-panel-bk/util"
+	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"net/http"
+	"strings"
 )
 
 func appMiddleware(m *chi.Mux) {
@@ -24,4 +28,41 @@ func appMiddleware(m *chi.Mux) {
 	m.Use(middleware.Heartbeat("/ping"))
 	m.Use(middleware.RequestID)
 	m.Use(middleware.CleanPath)
+}
+
+
+func GetBearerToken(r *http.Request) (*string, error) {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+
+	if authHeader == "" {
+		return nil, errors.New("missing Authorization header")
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if !strings.EqualFold(parts[0], "Bearer") {
+		return nil, errors.New("invalid Authorization header format")
+	}
+
+	token := strings.TrimSpace(parts[1])
+	if token == "" {
+		return nil, errors.New("empty token")
+	}
+
+	return &token, nil
+}
+
+
+func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)  {
+		token, err := GetBearerToken(r)
+
+		if err != nil {
+			util.ErrorException(w, err, http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "access_token", token)
+		newReq := r.WithContext(ctx)
+		next.ServeHTTP(w, newReq)
+	})
 }

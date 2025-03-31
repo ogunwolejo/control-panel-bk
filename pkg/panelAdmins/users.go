@@ -11,7 +11,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -44,7 +43,7 @@ type User struct {
 	UpdatedBy     string    `json:"updated_by"`
 
 	// The id of the user from the cognito user pool
-	Stub string `json:"stub"`
+	UpId string `json:"up_id,omitempty"`
 }
 
 type NewUser struct {
@@ -59,6 +58,60 @@ type NewUser struct {
 
 func getSession(client *mongo.Client) (session *mongo.Session, err error) {
 	return client.StartSession()
+}
+
+func (u *User) DeActiveUser(db *mongo.Database) (*User, error) {
+	if !u.IsActive {
+		return nil, errors.New("user is currently deactivated")
+	}
+
+	userID, userIDErr := util.GetPrimitiveID(u.ID)
+	if userIDErr != nil {
+		return nil, userIDErr
+	}
+
+	filter := bson.M{"_id": userID}
+	update := bson.M{
+		"$set": bson.M{
+			"is_active":      false,
+			"archive_status": true,
+			"updated_at":     time.Now(),
+			"updated_by":     u.UpdatedBy,
+		},
+	}
+	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	if err := db.Collection("users").FindOneAndUpdate(context.TODO(), filter, update, opt).Decode(&u); err != nil {
+		return nil, err
+	}
+
+	return u, nil
+}
+
+func (u *User) ActiveUser(db *mongo.Database) (*User, error) {
+	if u.IsActive {
+		return nil, errors.New("user is currently active")
+	}
+
+	userID, userIDErr := util.GetPrimitiveID(u.ID)
+	if userIDErr != nil {
+		return nil, userIDErr
+	}
+
+	filter := bson.M{"_id": userID}
+	update := bson.M{
+		"$set": bson.M{
+			"is_active":      true,
+			"archive_status": false,
+			"updated_at":     time.Now(),
+			"updated_by":     u.UpdatedBy,
+		},
+	}
+	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	if err := db.Collection("users").FindOneAndUpdate(context.TODO(), filter, update, opt).Decode(&u); err != nil {
+		return nil, err
+	}
+
+	return u, nil
 }
 
 func CreateUser(client *mongo.Client) http.HandlerFunc {
@@ -100,7 +153,7 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 			}
 
 			// STEP 2: CREATE THE USER IN COGNITO USER POOL
-			output, outputErr := aws.CreateNewUser(config.AwsConfig, newUser.Email, newUser.RoleId, util.DefaultPassword)
+			userId, outputErr := aws.CreateNewUser(config.AwsConfig, newUser.Email, newUser.RoleId, util.DefaultPassword)
 
 			if outputErr != nil {
 				return fmt.Errorf("failed to create a user in the userpool")
@@ -117,7 +170,7 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 				"created_at":        time.Now(),
 				"updated_at":        time.Now(),
 				"role_id":           newUser.RoleId,
-				"up_id":             output,
+				"up_id":             userId,
 				"is_active":         false, // Will be set to true when user changes passwords
 				"archive_status":    false,
 				"is_deleted_status": false,
@@ -129,8 +182,7 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 				return fmt.Errorf("failed to insert the user document in the users collection %w", docErr)
 			}
 
-			userId := doc.InsertedID.(bson.ObjectID).Hex() //doc.InsertedID.(string)
-			log.Println("USER ID: ", userId)
+			userID := doc.InsertedID.(bson.ObjectID).Hex() //doc.InsertedID.(string)
 
 			// STEP 4: ADD THE USER ID FROM THE "teams" COLLECTION into the team he was added to if such was provided
 			var team Team
@@ -156,12 +208,12 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 				// Add user to the team and update it
 				if newUser.IsTeamLead {
 					// The changeTeamLead will add the userId as a member of the team if he is not a member
-					_, tlErr, _ := team.ChangeTeamLead(userId, team.TeamLead, teamID, db, r.Context())
+					_, tlErr, _ := team.ChangeTeamLead(userID, team.TeamLead, teamID, db, r.Context())
 					if tlErr != nil {
 						return tlErr
 					}
 				} else {
-					mbr := []string{userId}
+					mbr := []string{userID}
 					if _, e, _ := team.AddNewTeamMember(mbr, teamID, db, r.Context()); e != nil {
 						return e
 					}

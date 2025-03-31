@@ -12,3 +12,4 @@ func ErrorException(w http.ResponseWriter, err error, errorCode int) {
 		"error": err.Error(),
 	})
 }
+

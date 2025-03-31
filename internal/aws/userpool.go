@@ -71,6 +71,7 @@ func CreateNewUser(cfg *aws.Config, username string, roleId string, tp util.Pass
 		},
 		UserAttributes: []types.AttributeType{
 			{Name: aws.String("email"), Value: aws.String(username)},
+			//{Name: aws.String("password"), Value: aws.String()},
 			{Name: aws.String("custom:role"), Value: aws.String(roleId)},
 		},
 		TemporaryPassword: aws.String(tp.GetPassword()),
@@ -160,7 +161,7 @@ func AuthViaRefreshToken(cfg *aws.Config, clientId, refreshToken string) (*cogni
 	return output, nil
 }
 
-func AuthViaAccessToken(cfg *aws.Config, accessToken string) (*cognitoidentityprovider.GetUserOutput, error) {
+func GetUserDetails(cfg *aws.Config, accessToken string) (*cognitoidentityprovider.GetUserOutput, error) {
 	client := cognitoidentityprovider.NewFromConfig(*cfg)
 
 	input := &cognitoidentityprovider.GetUserInput{
@@ -205,4 +206,37 @@ func LogOutUser(cfg *aws.Config, token string) error {
 	}
 
 	return nil
+}
+
+func ChangeUserPassword(cfg *aws.Config, token, proposedPassword, oldPassword string) (*cognitoidentityprovider.ChangePasswordOutput, error) {
+	client := getClient(cfg)
+
+	input := cognitoidentityprovider.ChangePasswordInput{
+		AccessToken:      aws.String(token),
+		ProposedPassword: aws.String(proposedPassword),
+		PreviousPassword: aws.String(oldPassword),
+	}
+
+	output, err := client.ChangePassword(context.TODO(), &input)
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func ResetPassword(cfg *aws.Config, email string) (*cognitoidentityprovider.ForgotPasswordOutput, error) {
+	client := getClient(cfg)
+
+	fgInput := cognitoidentityprovider.ForgotPasswordInput{
+		ClientId: aws.String(os.Getenv("AWS_CLIENT_ID")),
+		Username: aws.String(email),
+	}
+
+	output, err := client.ForgotPassword(context.TODO(), &fgInput)
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
 }

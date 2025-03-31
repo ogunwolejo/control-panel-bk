@@ -2,6 +2,7 @@ package internal
 
 import (
 	"control-panel-bk/internal/aws"
+	"control-panel-bk/pkg"
 	"control-panel-bk/pkg/panelAdmins"
 	"control-panel-bk/pkg/tiers"
 	"github.com/go-chi/chi/v5"
@@ -25,14 +26,24 @@ func Routes() *chi.Mux {
 	mux.Route("/api", func(r chi.Router) {
 		r.Route("/v1", func(r chi.Router) {
 
+			// Auth Sub Routes
+			r.Route("/auth", func(authRouter chi.Router) {
+				authRouter.Post("/create", panelAdmins.CreateUser(aws.MongoDBClient))
+				authRouter.Get("/refresh-token", pkg.RefreshTokenAuth)
+				authRouter.Post("/login", pkg.LoginHandler)
+				authRouter.Post("/logout", AuthMiddleware(pkg.LogoutHandler))
+				authRouter.Post("/change-password", AuthMiddleware(pkg.ChangePasswordHandle))
+				authRouter.Post("/reset-password", pkg.ResetPasswordHandle)
+			})
+
 			// The Tier Sub Routes
 			r.Route("/tier", func(tierRouter chi.Router) {
-				tierRouter.Get("/all", tiers.HandleFetchTiers)
-				tierRouter.Get("/{id}", tiers.HandleFetchTier)
+				tierRouter.Get("/all", AuthMiddleware(tiers.HandleFetchTiers))
+				tierRouter.Get("/{id}", AuthMiddleware(tiers.HandleFetchTier))
 
 				tierRouter.Group(func(tierRouterGroup chi.Router) {
 					tierRouterGroup.Post("/", tiers.HandleTierCreation)
-					tierRouterGroup.Put("/{id}", tiers.HandleUpdateTier)
+					tierRouterGroup.Put("/{id}", AuthMiddleware(tiers.HandleUpdateTier))
 				})
 			})
 
@@ -40,9 +51,9 @@ func Routes() *chi.Mux {
 			// Role sub-router
 			r.Route("/roles", func(roleRouter chi.Router) {
 				roleRouter.Post("/", panelAdmins.HandleCreateRole(db))
-				roleRouter.Get("/all", panelAdmins.HandleFetchRoles(db))
-				roleRouter.Get("/{id}", panelAdmins.HandleFetchRoleById(db))
-				roleRouter.Get("/name", panelAdmins.HandleFetchRoleByName(db)) // takes the query params page and limit
+				roleRouter.Get("/all", AuthMiddleware(panelAdmins.HandleFetchRoles(db)))
+				roleRouter.Get("/{id}", AuthMiddleware(panelAdmins.HandleFetchRoleById(db)))
+				roleRouter.Get("/name", AuthMiddleware(panelAdmins.HandleFetchRoleByName(db))) // takes the query params page and limit
 
 				roleRouter.Patch("/update", panelAdmins.HandleGeneralUpdate(db))
 				roleRouter.Patch("/archive", panelAdmins.HandleArchiveRole(db))
@@ -72,9 +83,7 @@ func Routes() *chi.Mux {
 			})
 
 			// User sub-router
-			r.Route("/users", func(userRouter chi.Router) {
-				userRouter.Post("/create", panelAdmins.CreateUser(aws.MongoDBClient))
-			})
+			r.Route("/users", func(userRouter chi.Router) {})
 
 		})
 	})

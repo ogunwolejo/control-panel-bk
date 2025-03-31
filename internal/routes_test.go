@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type TeamRoutesTestSuite struct {
+type RoutesTestSuite struct {
 	suite.Suite
 	router *chi.Mux
 }
@@ -23,8 +23,8 @@ func mockHandler(status int, body string) http.HandlerFunc {
 }
 
 // Run the test suite
-func TestTeamRoutesSuite(t *testing.T) {
-	suite.Run(t, new(TeamRoutesTestSuite))
+func TestRoutesSuite(t *testing.T) {
+	suite.Run(t, new(RoutesTestSuite))
 }
 
 func TestRoutes(t *testing.T) {
@@ -129,7 +129,7 @@ func TestRoutes(t *testing.T) {
 	}
 }
 
-func (suite *TeamRoutesTestSuite) SetupSuite() {
+func (suite *RoutesTestSuite) SetupSuite() {
 	suite.router = chi.NewRouter()
 
 	// Define mock team routes
@@ -149,10 +149,19 @@ func (suite *TeamRoutesTestSuite) SetupSuite() {
 		teamRouter.Get("/{id}", mockHandler(http.StatusOK, "Team details"))
 		teamRouter.Get("/all", mockHandler(http.StatusOK, "All teams"))
 	})
+
+
+	suite.router.Route("/users", func(userRouter chi.Router) {})
+	suite.router.Route("/auth", func(authRouter chi.Router) {
+		authRouter.Post("/create", mockHandler(http.StatusCreated, "New User was created"))
+		authRouter.Post("/login", mockHandler(http.StatusOK, "User is login"))
+		authRouter.Post("/logout", mockHandler(http.StatusOK, "User was logout"))
+		authRouter.Get("/refresh-token", mockHandler(http.StatusOK, "Token regenerated"))
+	})
 }
 
 // Test cases
-func (suite *TeamRoutesTestSuite) TestTeamRoutes() {
+func (suite *RoutesTestSuite) TestTeamRoutes() {
 	testCases := []struct {
 		name       string
 		method     string
@@ -178,6 +187,36 @@ func (suite *TeamRoutesTestSuite) TestTeamRoutes() {
 		// Get team details
 		{"GET /teams/{id}", http.MethodGet, "/teams/123", http.StatusOK, "Team details"},
 		{"GET /teams/all", http.MethodGet, "/teams/all", http.StatusOK, "All teams"},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			rec := httptest.NewRecorder()
+
+			suite.router.ServeHTTP(rec, req)
+
+			assert.Equal(suite.T(), tc.wantStatus, rec.Code)
+			assert.Contains(suite.T(), rec.Body.String(), tc.wantBody)
+		})
+	}
+}
+
+func (suite *RoutesTestSuite) TestAuthRoutes() {
+	testCases := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus int
+		wantBody   string
+	}{
+		// Create team
+		{"POST /auth/create", http.MethodPost, "/auth/create", http.StatusCreated, "New User was created"},
+		{"POST /auth/login", http.MethodPost, "/auth/login", http.StatusOK, "User is login"},
+		{"POST /auth/logout", http.MethodPost, "/auth/logout", http.StatusOK, "User was logout"},
+
+		// Get team details
+		{"GET /auth/refresh-token", http.MethodGet, "/auth/refresh-token", http.StatusOK, "Token regenerated"},
 	}
 
 	for _, tc := range testCases {
