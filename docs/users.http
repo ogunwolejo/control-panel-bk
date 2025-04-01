@@ -1,4 +1,5 @@
 POST {{BASE_URL}}/users/create
+Authorization: Bearer {{$auth.token("")}}
 Content-Type: application/json
 
 
@@ -29,6 +30,7 @@ Content-Type: application/json
 
 ###
 POST {{BASE_URL}}/users/create
+Authorization: Bearer {{$auth.token("")}}
 Content-Type: application/json
 
 
@@ -54,4 +56,48 @@ Content-Type: application/json
   "is_team_lead":false,
   "created_by": "jos",
   "updated_by": "jos"
+}
+
+
+### Fetch all users
+GET {{BASE_URL}}/users
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+
+### Fetch user by id
+GET {{BASE_URL}}/users/1234444444
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+### Fetch user by email or first name or last name or fullname
+GET {{BASE_URL}}/users/xxxx@gmail.com
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+
+### De-active a user
+PATCH {{BASE_URL}}/users/de-active
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+{
+  "id": "",
+  "role_id": "",
+  "updated_by": "",
+  "is_active": true,
+  "archive_status": false
+}
+
+### Active a user
+PATCH {{BASE_URL}}/users/reactive
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+{
+  "id": "",
+  "role_id": "",
+  "updated_by": "",
+  "is_active": false,
+  "archive_status": false
 }

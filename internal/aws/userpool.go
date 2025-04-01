@@ -225,7 +225,7 @@ func ChangeUserPassword(cfg *aws.Config, token, proposedPassword, oldPassword st
 	return output, nil
 }
 
-func ResetPassword(cfg *aws.Config, email string) (*cognitoidentityprovider.ForgotPasswordOutput, error) {
+func ForgetPasswordOtp(cfg *aws.Config, email string) (*cognitoidentityprovider.ForgotPasswordOutput, error) {
 	client := getClient(cfg)
 
 	fgInput := cognitoidentityprovider.ForgotPasswordInput{
@@ -239,4 +239,17 @@ func ResetPassword(cfg *aws.Config, email string) (*cognitoidentityprovider.Forg
 	}
 
 	return output, nil
+}
+
+func ForgetPassword(cfg *aws.Config, email, otp, password string) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error) {
+	client := getClient(cfg)
+
+	input := cognitoidentityprovider.ConfirmForgotPasswordInput{
+		Username: aws.String(email),
+		ClientId: aws.String(os.Getenv("AWS_CLIENT_ID")),
+		Password: aws.String(password),
+		ConfirmationCode: aws.String(otp),
+	}
+
+	return client.ConfirmForgotPassword(context.TODO(), &input)
 }

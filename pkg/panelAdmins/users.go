@@ -8,11 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,6 +26,7 @@ const (
 type Personal struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
+	FullName  string    `json:"full_name,omitempty"`
 	Gender    string    `json:"gender"`
 	Email     string    `json:"email"`
 	Phone     string    `json:"phone"`
@@ -32,14 +36,13 @@ type Personal struct {
 
 type User struct {
 	ID            string    `json:"id,omitempty"`
-	Personal      Personal  `json:"personal"`
+	Personal      Personal  `json:"personal,omitempty"`
 	RoleId        string    `json:"role_id"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at,omitempty"`
+	CreatedAt     time.Time `json:"created_at,omitempty"`
 	IsActive      bool      `json:"is_active"`
 	ArchiveStatus bool      `json:"archive_status"`
-	DeletedStatus bool      `json:"is_deleted_status"`
-	CreatedBy     string    `json:"created_by"`
+	CreatedBy     string    `json:"created_by,omitempty"`
 	UpdatedBy     string    `json:"updated_by"`
 
 	// The id of the user from the cognito user pool
@@ -60,58 +63,111 @@ func getSession(client *mongo.Client) (session *mongo.Session, err error) {
 	return client.StartSession()
 }
 
-func (u *User) DeActiveUser(db *mongo.Database) (*User, error) {
-	if !u.IsActive {
-		return nil, errors.New("user is currently deactivated")
-	}
+func DeActiveUser(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
 
-	userID, userIDErr := util.GetPrimitiveID(u.ID)
-	if userIDErr != nil {
-		return nil, userIDErr
-	}
+		var u User
+		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
 
-	filter := bson.M{"_id": userID}
-	update := bson.M{
-		"$set": bson.M{
-			"is_active":      false,
-			"archive_status": true,
-			"updated_at":     time.Now(),
-			"updated_by":     u.UpdatedBy,
-		},
-	}
-	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
-	if err := db.Collection("users").FindOneAndUpdate(context.TODO(), filter, update, opt).Decode(&u); err != nil {
-		return nil, err
-	}
+		if !u.IsActive {
+			util.ErrorException(w, errors.New("user is currently deactivated"), http.StatusBadRequest)
+			return
+		}
 
-	return u, nil
+		if _, err := aws.DisableUser(config.AwsConfig, u.Personal.Email); err != nil {
+			util.ErrorException(w, err, http.StatusNotImplemented)
+			return
+		}
+
+		userID, userIDErr := util.GetPrimitiveID(u.ID)
+		if userIDErr != nil {
+			util.ErrorException(w, userIDErr, http.StatusInternalServerError)
+			return
+		}
+
+		filter := bson.M{"_id": userID}
+		update := bson.M{
+			"$set": bson.M{
+				"is_active":      false,
+				"archive_status": true,
+				"updated_at":     time.Now(),
+				"updated_by":     u.UpdatedBy,
+			},
+		}
+
+		opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+		if err := db.Collection("users").FindOneAndUpdate(context.TODO(), filter, update, opt).Decode(&u); err != nil {
+			util.ErrorException(w, err, http.StatusNotImplemented)
+			return
+		}
+
+		respBytes, respErr := util.GetBytesResponse(http.StatusOK, u)
+		if respErr != nil {
+			util.ErrorException(w, respErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBytes)
+	}
 }
 
-func (u *User) ActiveUser(db *mongo.Database) (*User, error) {
-	if u.IsActive {
-		return nil, errors.New("user is currently active")
-	}
+func ActiveUser(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
 
-	userID, userIDErr := util.GetPrimitiveID(u.ID)
-	if userIDErr != nil {
-		return nil, userIDErr
-	}
+		var u User
+		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
 
-	filter := bson.M{"_id": userID}
-	update := bson.M{
-		"$set": bson.M{
-			"is_active":      true,
-			"archive_status": false,
-			"updated_at":     time.Now(),
-			"updated_by":     u.UpdatedBy,
-		},
-	}
-	opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
-	if err := db.Collection("users").FindOneAndUpdate(context.TODO(), filter, update, opt).Decode(&u); err != nil {
-		return nil, err
-	}
+		if u.IsActive {
+			util.ErrorException(w, errors.New("user is currently active"), http.StatusBadRequest)
+			return
+		}
 
-	return u, nil
+		if _, err := aws.ActivateUser(config.AwsConfig, u.Personal.Email); err != nil {
+			util.ErrorException(w, err, http.StatusNotImplemented)
+			return
+		}
+
+		userID, userIDErr := util.GetPrimitiveID(u.ID)
+		if userIDErr != nil {
+			util.ErrorException(w, userIDErr, http.StatusInternalServerError)
+			return
+		}
+
+		filter := bson.M{"_id": userID}
+		update := bson.M{
+			"$set": bson.M{
+				"is_active":      true,
+				"archive_status": false,
+				"updated_at":     time.Now(),
+				"updated_by":     u.UpdatedBy,
+			},
+		}
+		opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
+		if err := db.Collection("users").FindOneAndUpdate(context.TODO(), filter, update, opt).Decode(&u); err != nil {
+			util.ErrorException(w, err, http.StatusNotImplemented)
+			return
+		}
+
+		respBytes, respErr := util.GetBytesResponse(http.StatusOK, u)
+		if respErr != nil {
+			util.ErrorException(w, respErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBytes)
+	}
 }
 
 func CreateUser(client *mongo.Client) http.HandlerFunc {
@@ -163,6 +219,7 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 			doc, docErr := col.InsertOne(r.Context(), bson.M{
 				"first_name":        newUser.FirstName,
 				"last_name":         newUser.LastName,
+				"full_name":         strings.Join([]string{newUser.FirstName, newUser.LastName}, " "),
 				"email":             newUser.Email,
 				"phone_num":         newUser.Phone,
 				"gender":            newUser.Gender,
@@ -236,19 +293,16 @@ func CreateUser(client *mongo.Client) http.HandlerFunc {
 		}
 
 		// We will need to find the user by email
-		var response util.Response
+		var user User
 
-		findErr := col.FindOne(r.Context(), bson.M{"email": newUser.Email}).Decode(&response.Data)
+		findErr := col.FindOne(r.Context(), bson.M{"email": newUser.Email}).Decode(user)
 
 		if findErr != nil {
 			util.ErrorException(w, findErr, http.StatusNotFound)
 			return
 		}
 
-		response.Status = http.StatusCreated
-		response.Error = nil
-
-		respBy, respErr := util.GetBytesResponse(response.Status, response.Data)
+		respBy, respErr := util.GetBytesResponse(http.StatusCreated, user)
 		if respErr != nil {
 			util.ErrorException(w, respErr, http.StatusInternalServerError)
 			return
@@ -316,13 +370,7 @@ func GetUsers(db *mongo.Database) http.HandlerFunc {
 			return
 		}
 
-		var response = util.Response{
-			Status: http.StatusOK,
-			Data:   users,
-			Error:  nil,
-		}
-
-		respByt, respErr := util.GetBytesResponse(response.Status, response)
+		respByt, respErr := util.GetBytesResponse(http.StatusOK, users)
 
 		if respErr != nil {
 			util.ErrorException(writer, respErr, http.StatusInternalServerError)
@@ -330,7 +378,91 @@ func GetUsers(db *mongo.Database) http.HandlerFunc {
 		}
 
 		writer.Header().Set("Content-Type", "application/json")
-		writer.WriteHeader(response.Status)
+		writer.WriteHeader(http.StatusOK)
 		writer.Write(respByt)
+	}
+}
+
+func GetUser(db *mongo.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var users []User
+		user := chi.URLParam(r, "user") // The userId can be a name i.e (firstName, lastName, combination of both, email, or id)
+
+		isObjId, err := regexp.Match("^[a-f0-9]{24}$", []byte(user))                                                                                // Checking id the user params is of mongo ID
+		isNotObjId, e := regexp.Match("^(?:[A-Z][a-z]+( [A-Z][a-z]+)* [A-Z][a-z]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})$", []byte(user)) // Checking if the id is of first name, last name or full name or email
+
+		if err != nil {
+			util.ErrorException(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		if e != nil {
+			util.ErrorException(w, e, http.StatusInternalServerError)
+			return
+		}
+
+		if isObjId {
+			objID, objErr := util.GetPrimitiveID(user)
+
+			if objErr != nil {
+				util.ErrorException(w, objErr, http.StatusInternalServerError)
+				return
+			}
+
+			var u User
+
+			fil := bson.M{"_id": objID}
+			opt := options.FindOne().SetSort(bson.M{"created_at": -1})
+
+			if err := db.Collection("users").FindOne(r.Context(), fil, opt).Decode(&u); err != nil {
+				if errors.Is(err, mongo.ErrNoDocuments) {
+					util.ErrorException(w, errors.New("no team record was found"), http.StatusOK)
+					return
+				}
+
+				util.ErrorException(w, err, http.StatusNotFound)
+				return
+			}
+
+			users = append(users, u)
+		}
+
+		if isNotObjId {
+
+			filter := bson.M{
+				"$text": bson.M{
+					"$search": user,
+				},
+			}
+
+			opt := options.Find().SetLimit(50).SetAllowPartialResults(true)
+
+			result, resultErr := db.Collection("users").Find(r.Context(), filter, opt)
+
+			if resultErr != nil {
+				if errors.Is(resultErr, mongo.ErrNoDocuments) {
+					util.ErrorException(w, resultErr, http.StatusOK)
+					return
+				}
+
+				util.ErrorException(w, resultErr, http.StatusNotFound)
+				return
+			}
+
+			if err = result.All(r.Context(), &users); err != nil {
+				util.ErrorException(w, err, http.StatusNotFound)
+				return
+			}
+		}
+
+		respByt, respErr := util.GetBytesResponse(http.StatusOK, users)
+		if respErr != nil {
+			util.ErrorException(w, respErr, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respByt)
 	}
 }

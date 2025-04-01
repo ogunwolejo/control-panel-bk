@@ -2,7 +2,6 @@ package pkg
 
 import (
 	"control-panel-bk/config"
-	"control-panel-bk/internal"
 	"control-panel-bk/internal/aws"
 	"control-panel-bk/util"
 	"encoding/json"
@@ -20,13 +19,18 @@ type Credential struct {
 	Password string `json:"password"`
 }
 
-type Token struct {
-	AccessToken string `json:"access_token"`
+type Username struct {
+	Username string `json:"username"`
 }
 
 type ChangePassword struct {
 	NewPassword string `json:"new_password"`
 	OldPassword string `json:"old_password"`
+}
+
+type ForgetPasswordCred struct {
+	Credential
+	OtpCode string `json:"otp_code"`
 }
 
 func RefreshTokenAuth(w http.ResponseWriter, r *http.Request) {
@@ -56,15 +60,12 @@ func RefreshTokenAuth(w http.ResponseWriter, r *http.Request) {
 
 	util.SetHttpOnlyCookie(w, rtCookie)
 
-	resp := util.Response{
-		Status: http.StatusOK,
-		Data: map[string]string{
-			"AccessToken": *output.AuthenticationResult.AccessToken,
-			"IdToken":     *output.AuthenticationResult.IdToken,
-		},
+	data := map[string]string{
+		"AccessToken": *output.AuthenticationResult.AccessToken,
+		"IdToken":     *output.AuthenticationResult.IdToken,
 	}
 
-	if respBytes, respErr := util.GetBytesResponse(http.StatusOK, resp); respErr != nil {
+	if respBytes, respErr := util.GetBytesResponse(http.StatusOK, data); respErr != nil {
 		util.ErrorException(w, respErr, http.StatusInternalServerError)
 		return
 	} else {
@@ -102,15 +103,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	util.SetHttpOnlyCookie(w, rtCookie)
 
-	resp := util.Response{
-		Status: http.StatusOK,
-		Data: map[string]string{
-			"AccessToken": *output.AuthenticationResult.AccessToken,
-			"IdToken":     *output.AuthenticationResult.IdToken,
-		},
+	data := map[string]string{
+		"AccessToken": *output.AuthenticationResult.AccessToken,
+		"IdToken":     *output.AuthenticationResult.IdToken,
 	}
 
-	respBytes, respErr := util.GetBytesResponse(http.StatusOK, resp)
+	respBytes, respErr := util.GetBytesResponse(http.StatusOK, data)
 
 	if respErr != nil {
 		util.ErrorException(w, respErr, http.StatusInternalServerError)
@@ -123,14 +121,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	tkn, err := internal.GetBearerToken(r)
+	token := r.Context().Value("access_token").(string)
 
-	if err != nil {
-		util.ErrorException(w, err, http.StatusUnauthorized)
-		return
-	}
-
-	if err := aws.LogOutUser(config.AwsConfig, *tkn); err != nil {
+	if err := aws.LogOutUser(config.AwsConfig, token); err != nil {
 		util.ErrorException(w, err, http.StatusNotImplemented)
 		return
 	}
@@ -157,13 +150,7 @@ func ChangePasswordHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := util.Response{
-		Status: http.StatusOK,
-		Data: output.ResultMetadata,
-		Error: nil,
-	}
-
-	respBytes, respErr := util.GetBytesResponse(http.StatusOK, resp)
+	respBytes, respErr := util.GetBytesResponse(http.StatusOK, output.ResultMetadata)
 	if respErr != nil {
 		util.ErrorException(w, respErr, http.StatusInternalServerError)
 		return
@@ -174,4 +161,55 @@ func ChangePasswordHandle(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBytes)
 }
 
-func ResetPasswordHandle(w http.ResponseWriter, r *http.Request) {}
+func ForgetPasswordOtpHandle(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var cred Username
+	if err := json.NewDecoder(r.Body).Decode(&cred); err != nil {
+		util.ErrorException(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	_, err := aws.ForgetPasswordOtp(config.AwsConfig, cred.Username)
+	if err != nil {
+		util.ErrorException(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	respBytes, respErr := util.GetBytesResponse(http.StatusOK, "confirmation code sent")
+	if respErr != nil {
+		util.ErrorException(w, respErr, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respBytes)
+}
+
+func ForgetPasswordHandle(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var fCred ForgetPasswordCred
+	if err := json.NewDecoder(r.Body).Decode(&fCred); err != nil {
+		util.ErrorException(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	_, err := aws.ForgetPassword(config.AwsConfig, fCred.Username, fCred.OtpCode, fCred.Password)
+
+	if err != nil {
+		util.ErrorException(w, err, http.StatusNotImplemented)
+		return
+	}
+
+	respBytes, respErr := util.GetBytesResponse(http.StatusOK, "password has be changed")
+	if respErr != nil {
+		util.ErrorException(w, respErr, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respBytes)
+}

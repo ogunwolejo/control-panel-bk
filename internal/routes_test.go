@@ -150,13 +150,15 @@ func (suite *RoutesTestSuite) SetupSuite() {
 		teamRouter.Get("/all", mockHandler(http.StatusOK, "All teams"))
 	})
 
-
 	suite.router.Route("/users", func(userRouter chi.Router) {})
 	suite.router.Route("/auth", func(authRouter chi.Router) {
 		authRouter.Post("/create", mockHandler(http.StatusCreated, "New User was created"))
-		authRouter.Post("/login", mockHandler(http.StatusOK, "User is login"))
+		authRouter.Get("/login", mockHandler(http.StatusOK, "User is login"))
 		authRouter.Post("/logout", mockHandler(http.StatusOK, "User was logout"))
 		authRouter.Get("/refresh-token", mockHandler(http.StatusOK, "Token regenerated"))
+		authRouter.Post("/change-password", mockHandler(http.StatusOK, "Password has been changed"))
+		authRouter.Post("/forget-password", mockHandler(http.StatusOK, "Forgotten password"))
+		authRouter.Post("/forget-password-otp", mockHandler(http.StatusOK, "Forgotten password otp sent"))
 	})
 }
 
@@ -210,12 +212,13 @@ func (suite *RoutesTestSuite) TestAuthRoutes() {
 		wantStatus int
 		wantBody   string
 	}{
-		// Create team
 		{"POST /auth/create", http.MethodPost, "/auth/create", http.StatusCreated, "New User was created"},
 		{"POST /auth/login", http.MethodPost, "/auth/login", http.StatusOK, "User is login"},
-		{"POST /auth/logout", http.MethodPost, "/auth/logout", http.StatusOK, "User was logout"},
+		{"POST /auth/change-password", http.MethodPost, "/auth/change-password", http.StatusOK, "Password has been changed"},
+		{"POST /auth/forget-password", http.MethodPost, "/auth/forget-password", http.StatusOK, "Forgotten password"},
+		{"POST /auth/forget-password-otp", http.MethodPost, "/auth/forget-password-otp", http.StatusOK, "Forgotten password otp sent"},
 
-		// Get team details
+		{"GET /auth/logout", http.MethodPost, "/auth/logout", http.StatusOK, "User was logout"},
 		{"GET /auth/refresh-token", http.MethodGet, "/auth/refresh-token", http.StatusOK, "Token regenerated"},
 	}
 

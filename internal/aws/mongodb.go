@@ -94,8 +94,11 @@ func connect() (*mongo.Client, error) {
 			cn: "users",
 			indexes: []mongo.IndexModel{
 				{
-					Keys: bson.D{{"email", 1}},
+					Keys:    bson.D{{"email", 1}},
 					Options: options.Index().SetUnique(true),
+				},
+				{
+					Keys: bson.D{{"first_name", "text"}, {"last_name", "text"}, {"email", "text"}, {"full_name", "text"}},
 				},
 			},
 		},

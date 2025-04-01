@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -28,10 +29,10 @@ func appMiddleware(m *chi.Mux) {
 	m.Use(middleware.Heartbeat("/ping"))
 	m.Use(middleware.RequestID)
 	m.Use(middleware.CleanPath)
+	m.Use(AppAuthorizationMiddleware)
 }
 
-
-func GetBearerToken(r *http.Request) (*string, error) {
+func getBearerToken(r *http.Request) (*string, error) {
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 
 	if authHeader == "" {
@@ -51,10 +52,9 @@ func GetBearerToken(r *http.Request) (*string, error) {
 	return &token, nil
 }
 
-
 func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)  {
-		token, err := GetBearerToken(r)
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, err := getBearerToken(r)
 
 		if err != nil {
 			util.ErrorException(w, err, http.StatusUnauthorized)
@@ -64,5 +64,19 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		ctx := context.WithValue(r.Context(), "access_token", token)
 		newReq := r.WithContext(ctx)
 		next.ServeHTTP(w, newReq)
+	}
+}
+
+func AppAuthorizationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+
+		request.URL.OmitHost = true
+		requestMethod := request.Method
+		path := request.URL.Path
+		frg := request.URL.Fragment
+		rr := request.URL.RequestURI()
+
+		log.Printf("App-Auth: Request Method is: %s, and the path is: %s, Fragments are: %s, RequestURI is: %s", requestMethod, path, frg, rr)
+		next.ServeHTTP(writer, request)
 	})
 }

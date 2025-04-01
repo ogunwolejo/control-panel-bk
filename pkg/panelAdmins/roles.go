@@ -584,7 +584,7 @@ func HandleArchiveRole(db *mongo.Database) http.HandlerFunc {
 			return
 		}
 
-		archBytes, archErr := json.Marshal(&doc)
+		archBytes, archErr := util.GetBytesResponse(http.StatusOK, doc)
 		if archErr != nil {
 			util.ErrorException(w, archErr, http.StatusInternalServerError)
 			return
