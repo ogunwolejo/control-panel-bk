@@ -15,7 +15,16 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+ vendor/
+
+# Air directory
+tmp/
+tmp/air.log
+tmp/build-errors.log
+*/*.log
+
+# Text files
+*.txt
 
 # Go workspace file
 go.work
@@ -23,3 +32,6 @@ go.work.sum
 
 # env file
 .env
+
+# Yaml
+*.yaml

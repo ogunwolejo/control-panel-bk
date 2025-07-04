@@ -1,0 +1,227 @@
+// Role-based Endpoints
+
+### Update the text base data
+PATCH {{BASE_URL}}/roles/update
+Content-Type: application/json
+
+{
+  "_id": "67db3402d08dedc2e44081bb",
+  "name": "ceo",
+  "description": "super admin => senior man, senior boss",
+  "permission": {
+    "onboarding": {
+      "write": true,
+      "read": true
+    },
+    "role": {
+      "write": true,
+      "read": true
+    },
+    "team": {
+      "write": true,
+      "read": true
+    },
+    "tenant": {
+      "write": true,
+      "read": true
+    },
+    "billing": {
+      "write": true,
+      "read": true
+    }
+  },
+  "created_by": "Joshua Ogunwole",
+  "updated_by": "Joshua Ogunwole",
+  "archive_status": false,
+  "is_deleted_status": false,
+  "created_at": "2025-03-19T21:15:46.330Z",
+  "updated_at": "2025-03-19T21:15:46.330Z"
+}
+
+
+### Delete role from DB
+DELETE {{BASE_URL}}/roles/delete
+Content-Type: application/json
+
+{
+  "_id":"67dadf16807c2c06a24299fd",
+  "name": "administrator 1",
+  "description": "Heading all operations, the replacement of the CEO, does everything the ceo can do ",
+  "permission": {
+    "onboarding": {
+      "write": true,
+      "read": true
+    },
+    "role": {
+      "write": true,
+      "read": true
+    },
+    "team": {
+      "write": false,
+      "read": false
+    },
+    "tenant": {
+      "write": true,
+      "read": false
+    },
+    "billing": {
+      "write": false,
+      "read": false
+    }
+  },
+  "created_by": "Joshua Ogunwole",
+  "updated_by": "Joshua Jay",
+  "archive_status": false,
+  "is_deleted_status": false,
+  "created_at":"2025-03-19T15:13:26.083Z",
+  "updated_at":"2025-03-19T21:34:52.299Z"
+}
+
+
+### Soft delete a role -> sending the role to the trash bin
+PATCH {{BASE_URL}}/roles/bin
+Content-Type: application/json
+
+{
+  "_id":"67dadf16807c2c06a24299fd",
+  "name": "administrator 1",
+  "description": "Heading all operations, the replacement of the CEO, does everything the ceo can do ",
+  "permission": {
+    "onboarding": {
+      "write": true,
+      "read": true
+    },
+    "role": {
+      "write": true,
+      "read": true
+    },
+    "team": {
+      "write": false,
+      "read": false
+    },
+    "tenant": {
+      "write": true,
+      "read": false
+    },
+    "billing": {
+      "write": false,
+      "read": false
+    }
+  },
+  "created_by": "Joshua Ogunwole",
+  "updated_by": "Joshua Jay",
+  "archive_status": false,
+  "is_deleted_status": false,
+  "created_at":"2025-03-19T15:13:26.083Z",
+  "updated_at":"2025-03-19T21:34:52.299Z"
+}
+
+
+### Un-archive a role
+PATCH {{BASE_URL}}/roles/unarchive
+Content-Type: application/json
+
+{
+  "_id":"67dadf16807c2c06a24299fd",
+  "name": "administrator 1",
+  "description": "Heading all operations, the replacement of the CEO, does everything the ceo can do ",
+  "permission": {
+    "onboarding": {
+      "write": true,
+      "read": true
+    },
+    "role": {
+      "write": true,
+      "read": true
+    },
+    "team": {
+      "write": false,
+      "read": false
+    },
+    "tenant": {
+      "write": true,
+      "read": false
+    },
+    "billing": {
+      "write": false,
+      "read": false
+    }
+  },
+  "created_by": "Joshua Ogunwole",
+  "updated_by": "Joshua Jay",
+  "archive_status": true,
+  "is_deleted_status": false,
+  "created_at":"2025-03-19T15:13:26.083Z",
+  "updated_at":"2025-03-19T21:34:52.299Z"
+}
+
+
+### Archive Role
+PATCH {{BASE_URL}}/roles/archive
+Content-Type: application/json
+
+{
+  "_id":"67dadf16807c2c06a24299fd",
+  "name": "administrator 1",
+  "description": "Heading all operations, the replacement of the CEO, does everything the ceo can do ",
+  "permission": {
+    "onboarding": {
+      "write": true,
+      "read": true
+    },
+    "role": {
+      "write": true,
+      "read": true
+    },
+    "team": {
+      "write": false,
+      "read": false
+    },
+    "tenant": {
+      "write": true,
+      "read": false
+    },
+    "billing": {
+      "write": false,
+      "read": false
+    }
+  },
+  "created_by": "Joshua Ogunwole",
+  "updated_by": "Joshua Ogunwole",
+  "archive_status": false,
+  "is_deleted_status": false,
+  "created_at":"2025-03-19T15:13:26.083Z",
+  "updated_at":"2025-03-19T15:13:26.083Z"
+}
+
+### Fetch Role by Name
+GET {{BASE_URL}}/roles/name?name=administrator 1
+Accept: application/json
+
+### Fetch Role by ID
+GET {{BASE_URL}}/roles/67dadf16807c2c06a24299fd
+Content-Type: application/json
+
+
+### CREATE NEW ROLE
+POST {{BASE_URL}}/roles
+Content-Type: application/json
+
+{
+  "name": "ceo",
+  "description": "super admin",
+  "permission": {
+    "onboarding":{"write": true, "read": true},
+    "role": {"write": true, "read": true},
+    "tenant": {"write": true, "read": true},
+    "team": {"write": true, "read": true},
+    "billing": {"write": true, "read": true}
+  },
+  "created_by": "Joshua Ogunwole",
+  "updated_by": "Joshua Ogunwole"
+}
+
+
+### FETCH ALL ROLES
+GET {{BASE_URL}}/roles/all?page=1&limit=50
+Content-Type: application/json

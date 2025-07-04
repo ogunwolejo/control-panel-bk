@@ -2,9 +2,11 @@ FROM golang:1.24 AS builder
 
 RUN mkdir /app
 
-COPY . /app
-
 WORKDIR /app
+
+COPY . .
+
+RUN go mod tidy
 
 RUN CGO_ENABLED=0 go build -o controlPanelApp ./cmd
 
@@ -18,3 +20,5 @@ RUN mkdir /app
 COPY --from=builder /app/controlPanelApp /app
 
 CMD [ "/app/controlPanelApp" ]
+
+

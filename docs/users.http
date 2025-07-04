@@ -1,0 +1,103 @@
+POST {{BASE_URL}}/users/create
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+
+# Note: if the role_id has a value, then the role will be empty and vice-verse
+#"role": {
+#"name": "",
+#"description": "",
+#"permission": {},
+#"created_by": "jos",
+#"updated_by": "jos"
+#},
+# the team_id can also be omitted
+# Dob, Profile can be omitted
+# role.description can be omitted
+
+{
+  "first_name": "Joshua",
+  "last_name": "Ogunwole",
+  "gender": "male",
+  "email": "ogunwole888@gmail.com",
+  "phone": "+2349031846448",
+  "role_id": "67db3402d08dedc2e44081bb",
+  "is_team_lead":false,
+  "created_by": "jos",
+  "updated_by": "jos"
+}
+
+
+###
+POST {{BASE_URL}}/users/create
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+
+{
+  "first_name": "Joshua",
+  "last_name": "Ogunwole",
+  "gender": "male",
+  "email": "ogunwole888@gmail.com",
+  "phone": "+2349031846448",
+  "role": {
+    "name": "administrator 1",
+    "description": "second to the ceo",
+    "permission": {
+      "onboarding":{"write": true, "read": true},
+      "role": {"write": true, "read": true},
+      "tenant": {"write": true, "read": true},
+      "team": {"write": true, "read": true},
+      "billing": {"write": false, "read": true}
+    },
+    "created_by": "jos",
+    "updated_by": "jos"
+  },
+  "is_team_lead":false,
+  "created_by": "jos",
+  "updated_by": "jos"
+}
+
+
+### Fetch all users
+GET {{BASE_URL}}/users
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+
+### Fetch user by id
+GET {{BASE_URL}}/users/1234444444
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+### Fetch user by email or first name or last name or fullname
+GET {{BASE_URL}}/users/xxxx@gmail.com
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+
+### De-active a user
+PATCH {{BASE_URL}}/users/de-active
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+{
+  "id": "",
+  "role_id": "",
+  "updated_by": "",
+  "is_active": true,
+  "archive_status": false
+}
+
+### Active a user
+PATCH {{BASE_URL}}/users/reactive
+Authorization: Bearer {{$auth.token("")}}
+Content-Type: application/json
+
+{
+  "id": "",
+  "role_id": "",
+  "updated_by": "",
+  "is_active": false,
+  "archive_status": false
+}
